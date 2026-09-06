@@ -1331,7 +1331,7 @@ def check_single_document(file_obj, min_words=6, pass_thresh=PASS_THRESHOLD, dro
 SWISS_MONOCHROME_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Geist:wght@300;400;500;600;700&display=swap');
 
-:root, body, .gradio-container {
+:root, body, .gradio-container, .gradio-container.light, .gradio-container.dark, gradio-app {
     --bg-dark: #090A0C !important;
     --surface-dark: #111317 !important;
     --surface-card: #161920 !important;
@@ -1341,12 +1341,27 @@ SWISS_MONOCHROME_CSS = """
     --text-muted: #94A3B8 !important;
     --text-dim: #64748B !important;
     --accent-cyan: #38BDF8 !important;
+    --body-background-fill: #090A0C !important;
+    --background-fill-primary: #111317 !important;
+    --background-fill-secondary: #161920 !important;
+    --block-background-fill: #111317 !important;
+    --block-border-color: #222631 !important;
+    --border-color-primary: #222631 !important;
+    --body-text-color: #F3F4F6 !important;
+    --block-label-text-color: #94A3B8 !important;
+    --input-background-fill: #090A0C !important;
+    --input-border-color: #222631 !important;
+    --input-text-color: #F3F4F6 !important;
+    --table-odd-background-fill: #111317 !important;
+    --table-even-background-fill: #161920 !important;
+    --panel-background-fill: #111317 !important;
+    --panel-border-color: #222631 !important;
     background-color: #090A0C !important;
     color: #F3F4F6 !important;
     font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
 }
 
-body, html, .gradio-container, gradio-app {
+body, html, .gradio-container, .gradio-container.light, gradio-app {
     background: #090A0C !important;
     color: #F3F4F6 !important;
 }
@@ -1572,9 +1587,18 @@ def build_gradio_app():
             blocks_kwargs["theme"] = gr.themes.Base()
     if "css" in blocks_params:
         blocks_kwargs["css"] = SWISS_MONOCHROME_CSS
+    if "js" in blocks_params:
+        blocks_kwargs["js"] = "() => { document.documentElement.classList.add('dark'); document.body.classList.add('dark'); }"
 
     with gr.Blocks(**blocks_kwargs) as demo:
-        gr.HTML("""
+        gr.HTML(f"""
+        <style>
+        {SWISS_MONOCHROME_CSS}
+        </style>
+        <script>
+        document.documentElement.classList.add('dark');
+        document.body.classList.add('dark');
+        </script>
         <div class="swiss-masthead">
             <div class="swiss-brand">
                 <div class="swiss-brand-title">
@@ -1783,9 +1807,12 @@ if __name__ == "__main__":
     launch_kwargs = {"share": True, "debug": False}
     launch_params = inspect.signature(demo.launch).parameters
     if "theme" in launch_params and "theme" not in inspect.signature(gr.Blocks.__init__).parameters:
-        launch_kwargs["theme"] = gr.themes.Soft()
+        try:
+            launch_kwargs["theme"] = gr.themes.Monochrome()
+        except Exception:
+            pass
     if "css" in launch_params and "css" not in inspect.signature(gr.Blocks.__init__).parameters:
-        launch_kwargs["css"] = ".dataframe-table { font-size: 13.5px !important; }"
+        launch_kwargs["css"] = SWISS_MONOCHROME_CSS
 
     queue_kwargs = {}
     queue_params = inspect.signature(demo.queue).parameters
