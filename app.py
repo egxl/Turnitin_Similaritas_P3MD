@@ -603,9 +603,81 @@ Belum ada data analisis tersimpan. Silakan unggah file tugas ke Google Drive lal
 
 pipeline_lock = threading.Lock()
 last_pipeline_run_time = 0.0
+pipeline_start_time = 0.0
+active_jobs_count = 0
+jobs_lock = threading.Lock()
+
+def get_current_queue_status():
+    """
+    Mengembalikan status antrean server secara realtime tanpa memicu antrean analisis.
+    """
+    global active_jobs_count, last_pipeline_run_time, pipeline_start_time
+    
+    target_dir = "./dokumen_tugas_p3md"
+    db_candidates = [
+        os.path.join(target_dir, "similarity_cache.db"),
+        "similarity_cache.db"
+    ]
+    doc_count = 0
+    pair_count = 0
+    for p in db_candidates:
+        if os.path.exists(p):
+            try:
+                conn = sqlite3.connect(p)
+                cur = conn.cursor()
+                cur.execute("SELECT count(*) FROM documents")
+                doc_count = cur.fetchone()[0]
+                cur.execute("SELECT count(*) FROM pairs")
+                pair_count = cur.fetchone()[0]
+                conn.close()
+                break
+            except Exception:
+                pass
+
+    with jobs_lock:
+        current_queued = active_jobs_count
+
+    now = time.time()
+    
+    if current_queued > 0 or pipeline_lock.locked():
+        elapsed = int(now - pipeline_start_time) if pipeline_start_time > 0 else 0
+        waiting = max(0, current_queued - 1)
+        status_html = f"""<div style="padding: 10px 14px; border-radius: 8px; background: #fff3cd; border: 1.5px solid #ffeeba; color: #856404; margin-bottom: 12px;">
+    <div style="font-size: 14.5px; font-weight: bold; display: flex; align-items: center; justify-content: space-between;">
+        <span>⏳ <b>Status Server: SEDANG MEMPROSES ANALISIS</b></span>
+        <span style="font-size: 12px; background: #ffe8a1; padding: 2px 8px; border-radius: 10px; color: #664d03;">{current_queued} Tugas Aktif</span>
+    </div>
+    <div style="font-size: 12.5px; margin-top: 4px; color: #664d03;">
+        • <b>Proses Berjalan:</b> 1 analisis sedang aktif ({elapsed}s berjalan) &nbsp;|&nbsp; <b>Menunggu di Antrean:</b> {waiting} tugas<br/>
+        • <b>Database Saat Ini:</b> {doc_count} dokumen tersimpan ({pair_count:,} pasangan teranalisis)
+    </div>
+</div>"""
+    else:
+        last_updated_str = "Belum pernah dijalankan"
+        if last_pipeline_run_time > 0:
+            diff_m = int((now - last_pipeline_run_time) / 60)
+            if diff_m < 1:
+                last_updated_str = "Baru saja (< 1 menit yang lalu)"
+            elif diff_m < 60:
+                last_updated_str = f"{diff_m} menit yang lalu"
+            else:
+                last_updated_str = f"{diff_m // 60} jam yang lalu"
+
+        status_html = f"""<div style="padding: 10px 14px; border-radius: 8px; background: #d4edda; border: 1.5px solid #c3e6cb; color: #155724; margin-bottom: 12px;">
+    <div style="font-size: 14.5px; font-weight: bold; display: flex; align-items: center; justify-content: space-between;">
+        <span>🟢 <b>Status Server: KOSONG & SIAP (IDLE)</b></span>
+        <span style="font-size: 12px; background: #c3e6cb; padding: 2px 8px; border-radius: 10px; color: #0f5132;">0 Antrean Menunggu</span>
+    </div>
+    <div style="font-size: 12.5px; margin-top: 4px; color: #155724;">
+        • <b>Antrean Bebas:</b> Tidak ada proses berjalan. Analisis baru dapat langsung dimulai tanpa menunggu.<br/>
+        • <b>Terakhir Disinkronkan:</b> {last_updated_str} &nbsp;|&nbsp; <b>Database:</b> {doc_count} dokumen tersimpan ({pair_count:,} pasangan)
+    </div>
+</div>"""
+
+    return status_html
 
 def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_bib, force_recompute, progress=None):
-    global last_pipeline_run_time
+    global last_pipeline_run_time, pipeline_start_time, active_jobs_count
     if progress is None and gr is not None:
         progress = gr.Progress()
     if progress is None:
@@ -615,7 +687,12 @@ def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_b
     db_path = os.path.join(target_dir, "similarity_cache.db")
     excel_path = os.path.join(target_dir, "Turnitin_Similarity_Report_P3MD.xlsx")
 
-    with pipeline_lock:
+    with jobs_lock:
+        active_jobs_count += 1
+
+    try:
+        with pipeline_lock:
+            pipeline_start_time = time.time()
         now = time.time()
         # Pintasan Cerdas: Jika analisis baru selesai < 30 detik lalu dan bukan force_recompute
         if not force_recompute and (now - last_pipeline_run_time < 30) and os.path.exists(excel_path):
@@ -771,6 +848,9 @@ def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_b
         last_pipeline_run_time = time.time()
         progress(1.0, desc="Selesai!")
         return summary_md, df_display, excel_path, df_display, ""
+    finally:
+        with jobs_lock:
+            active_jobs_count = max(0, active_jobs_count - 1)
 
 def check_single_document(file_obj, min_words=6, pass_thresh=PASS_THRESHOLD, drop_quotes=True, drop_bib=True, progress=None):
     """
@@ -947,6 +1027,19 @@ def build_gradio_app():
         **Sistem Deteksi Similaritas Dokumen Tugas Cohort P3MD Berbasis Standar Turnitin Resmi**
         """)
 
+        # Live Queue & Server Status Monitor (Bebas Antrean - queue=False)
+        with gr.Row():
+            with gr.Column(scale=5):
+                queue_status_display = gr.HTML(value=get_current_queue_status)
+            with gr.Column(scale=1):
+                refresh_queue_btn = gr.Button("🔄 Cek Antrean", variant="secondary", size="sm")
+
+        refresh_queue_btn.click(
+            fn=get_current_queue_status,
+            outputs=[queue_status_display],
+            queue=False
+        )
+
         with gr.Tabs():
             # ==========================================
             # TAB 1: CEK MANDIRI DOKUMEN (INSTAN ~2 DETIK)
@@ -1088,6 +1181,14 @@ def build_gradio_app():
                     inputs=[drive_input, min_words_slider, thresh_slider, quotes_cb, bib_cb, force_cb],
                     outputs=[status_output, table_output, download_btn, current_df_state, search_input]
                 )
+
+        demo.load(fn=get_current_queue_status, outputs=[queue_status_display], queue=False)
+        if hasattr(gr, "Timer"):
+            try:
+                timer = gr.Timer(value=10)
+                timer.tick(fn=get_current_queue_status, outputs=[queue_status_display], queue=False)
+            except Exception:
+                pass
 
     return demo
 
