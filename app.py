@@ -756,7 +756,15 @@ def build_gradio_app():
 
     init_summary, init_df, init_excel = load_latest_leaderboard()
 
-    with gr.Blocks(title="Turnitin Document Similarity - P3MD", theme=gr.themes.Soft(), css=".dataframe-table { font-size: 13.5px !important; }") as demo:
+    import inspect
+    blocks_kwargs = {"title": "Turnitin Document Similarity - P3MD"}
+    blocks_params = inspect.signature(gr.Blocks.__init__).parameters
+    if "theme" in blocks_params:
+        blocks_kwargs["theme"] = gr.themes.Soft()
+    if "css" in blocks_params:
+        blocks_kwargs["css"] = ".dataframe-table { font-size: 13.5px !important; }"
+
+    with gr.Blocks(**blocks_kwargs) as demo:
         gr.Markdown("""
         # 🔍 Turnitin Document Similarity Checker (P3MD)
         **Sistem Deteksi Similaritas Dokumen Tugas Cohort P3MD Berbasis Standar Turnitin Resmi**
@@ -821,14 +829,20 @@ def build_gradio_app():
             )
             reset_search_btn = gr.Button("🔄 Reset Pencarian", scale=1, variant="secondary")
 
-        # Full Page Recap Table
-        table_output = gr.Dataframe(
-            value=init_df,
-            label="👤 Rekap Hasil Per Peserta (Leaderboard 1 Baris Per Dokumen - Diurutkan dari Skor Tertinggi)",
-            interactive=False,
-            wrap=True,
-            height=750
-        )
+        # Full Page Recap Table (Kompatibel Gradio 4, 5, dan 6)
+        df_kwargs = {
+            "value": init_df,
+            "label": "👤 Rekap Hasil Per Peserta (Leaderboard 1 Baris Per Dokumen - Diurutkan dari Skor Tertinggi)",
+            "interactive": False,
+            "wrap": True,
+        }
+        df_params = inspect.signature(gr.Dataframe.__init__).parameters
+        if "max_height" in df_params:
+            df_kwargs["max_height"] = 800
+        elif "height" in df_params:
+            df_kwargs["height"] = 800
+
+        table_output = gr.Dataframe(**df_kwargs)
 
         current_df_state = gr.State(value=init_df)
 
@@ -860,4 +874,11 @@ if __name__ == "__main__":
         print("⚠️ Gradio belum terpasang. Jalankan: pip install gradio")
         sys.exit(1)
     demo = build_gradio_app()
-    demo.queue().launch(share=True, debug=False)
+    import inspect
+    launch_kwargs = {"share": True, "debug": False}
+    launch_params = inspect.signature(demo.launch).parameters
+    if "theme" in launch_params and "theme" not in inspect.signature(gr.Blocks.__init__).parameters:
+        launch_kwargs["theme"] = gr.themes.Soft()
+    if "css" in launch_params and "css" not in inspect.signature(gr.Blocks.__init__).parameters:
+        launch_kwargs["css"] = ".dataframe-table { font-size: 13.5px !important; }"
+    demo.queue().launch(**launch_kwargs)
