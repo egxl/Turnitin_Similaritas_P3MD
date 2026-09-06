@@ -13,20 +13,23 @@ Aplikasi pendeteksi similaritas dokumen berbasis standar Turnitin resmi yang dio
    - Saat ada **1 dokumen baru ditambahkan**, sistem **hanya membandingkan dokumen baru tersebut** terhadap dokumen yang sudah ada ($N$ pasangan, bukan $\approx 80.000$ pasangan!). Menghemat 99% waktu komputasi.
    - Pre-computed K-Gram indexing dilakukan sekali per dokumen untuk eksekusi ribuan kali lebih cepat.
 
-2. **Bypass Batas 50 File Google Drive**:
+2. **Bypass Batas 50 File & Auto-Sync Cache ke Google Drive**:
    - Menghilangkan batasan unduhan 50 file dari `gdown` atau Google Drive web view.
    - Menggunakan Google Drive API v3 dengan pagination resmi (`pageSize=1000` & loop `nextPageToken`).
+   - **Auto-Sync Database Cache (`similarity_cache.db`)**: Otomatis mengunduh cache database dari Google Drive saat awal sesi, dan mengunggah kembali cache terbaru serta laporan Excel ke Google Drive setelah analisis. Data komputasi lama **tidak pernah hilang** meski runtime Google Colab di-restart!
    - Pemeriksaan ukuran file lokal: file yang sudah diunduh otomatis dilewati (**Smart Sync**), sehingga saat ada file baru di Drive, hanya file baru tersebut yang diunduh.
    - Tanpa perlu pengaturan folder lokal manual atau mount Google Drive yang rumit.
 
-3. **Antarmuka Web Gratis (Gradio - Uptime 72 Jam)**:
+3. **Antarmuka Web Modern (Gradio - Uptime 72 Jam)**:
    - Dilengkapi dashboard web interaktif modern yang dapat diakses langsung dari browser komputer maupun smartphone.
    - Menghasilkan tautan publik (`https://xxxx.gradio.live`) gratis selama 72 jam per sesi tanpa perlu registrasi akun atau kartu kredit.
    - Fitur Web UI:
+     - **Tampilan Langsung Data Terbaru (Tanpa Layar Kosong)**: Saat pertama kali membuka tautan Web UI, data hasil analisis terbaru, ringkasan KPI, dan file unduhan Excel langsung tampil secara instan.
+     - **Kolom Pencarian Dokumen / Peserta (*Live Search Bar*)**: Memudahkan peserta mencari nama file atau namanya secara instan tanpa perlu mencari satu per satu.
+     - **Tabel Rekap Berukuran Penuh (*Full-Page Table*)**: Tabel Leaderboard dirancang dengan tinggi layar penuh (~750px) agar nyaman dibaca dan memuat puluhan baris sekaligus.
      - **Folder Google Drive Terintegrasi & Clickable**: Tombol langsung untuk membuka folder Google Drive tugas P3MD tempat peserta mengunggah dokumen.
      - **Panduan Alur Kerja Jelas**: Kartu instruksi langkah-demi-langkah (Upload $\rightarrow$ Cek $\rightarrow$ Pantau $\rightarrow$ Unduh) terpampang langsung di antarmuka.
      - **Bilah Kemajuan (*Live Progress Bar*)**: Memantau setiap tahapan (sinkronisasi Drive, ekstraksi teks dokumen, perbandingan inkremental pasangan, dan pembuatan laporan Excel) secara visual dan realtime.
-     - **Tabel Rekap Per Peserta (*Leaderboard*)**: Menampilkan status kelulusan (`PASS`/`FAIL`), skor tertinggi, dokumen paling mirip, dan rata-rata similaritas cohort.
      - **Unduh Laporan Excel Resmi**: Unduh laporan 7-Sheet lengkap dalam format `.xlsx` dengan satu klik.
 
 4. **Standar Parameter Resmi Turnitin**:

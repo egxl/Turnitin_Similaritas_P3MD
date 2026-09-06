@@ -10,5 +10,6 @@ __pycache__/
 # Project Generated Cache and Output
 similarity_cache.db
 *.xlsx
+!Turnitin_Similarity_Report_P3MD.xlsx
 dokumen_tugas_p3md/
 .cache/

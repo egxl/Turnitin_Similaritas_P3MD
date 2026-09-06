@@ -13,6 +13,7 @@ import json
 import sqlite3
 import pandas as pd
 from itertools import combinations
+
 try:
     from docx import Document
 except ImportError:
@@ -47,9 +48,13 @@ def extract_raw_text(file_path):
     text = ""
     try:
         if ext == ".docx":
+            if Document is None:
+                raise ImportError("Library 'python-docx' belum terinstal. Silakan jalankan: pip install python-docx")
             doc = Document(file_path)
             text = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
         elif ext == ".pdf":
+            if PdfReader is None:
+                raise ImportError("Library 'pypdf' belum terinstal. Silakan jalankan: pip install pypdf")
             reader = PdfReader(file_path)
             text = "\n".join([page.extract_text() or "" for page in reader.pages])
         elif ext == ".txt":
@@ -298,7 +303,6 @@ class TurnitinDBCache:
             conn.close()
 
         names_set = set(active_names)
-
         filtered_rows = []
         for r in rows:
             if r[0] in names_set and r[1] in names_set:
@@ -329,10 +333,59 @@ def extract_folder_id(url):
     if match: return match.group(1)
     return url.strip()
 
+def upload_file_to_drive(file_path, folder_id, drive_service=None, log_callback=print):
+    """Mengunggah atau memperbarui file ke folder Google Drive."""
+    if not os.path.exists(file_path):
+        return False
+    file_name = os.path.basename(file_path)
+    if not drive_service:
+        try:
+            from google.colab import auth
+            auth.authenticate_user()
+            from googleapiclient.discovery import build
+            drive_service = build('drive', 'v3')
+        except Exception:
+            try:
+                from googleapiclient.discovery import build
+                drive_service = build('drive', 'v3')
+            except Exception as e:
+                log_callback(f"ℹ️ Google Drive upload dilewati: {e}")
+                return False
+
+    try:
+        from googleapiclient.http import MediaFileUpload
+        query = f"'{folder_id}' in parents and trashed = false and name = '{file_name}'"
+        res = drive_service.files().list(q=query, fields="files(id, name)").execute()
+        existing_files = res.get('files', [])
+        media = MediaFileUpload(file_path, resumable=True)
+
+        if existing_files:
+            file_id = existing_files[0]['id']
+            drive_service.files().update(
+                fileId=file_id,
+                media_body=media
+            ).execute()
+            log_callback(f"☁️ Berhasil memperbarui file di Google Drive: {file_name}")
+        else:
+            metadata = {
+                'name': file_name,
+                'parents': [folder_id]
+            }
+            drive_service.files().create(
+                body=metadata,
+                media_body=media,
+                fields='id'
+            ).execute()
+            log_callback(f"☁️ Berhasil mengunggah file baru ke Google Drive: {file_name}")
+        return True
+    except Exception as e:
+        log_callback(f"⚠️ Gagal mengunggah {file_name} ke Google Drive: {e}")
+        return False
+
 def sync_drive_folder(folder_url_or_id, destination="./dokumen_tugas_p3md", log_callback=print, progress_callback=None):
     """
     Sinkronisasi Google Drive dengan pagination (pageSize=1000) dan skip file lokal.
-    Tidak akan terkena batas 50 file Google Drive dan hanya mengunduh file baru!
+    Otomatis mendownload similarity_cache.db dan dokumen naskah tugas baru.
     """
     os.makedirs(destination, exist_ok=True)
     folder_id = extract_folder_id(folder_url_or_id)
@@ -352,7 +405,6 @@ def sync_drive_folder(folder_url_or_id, destination="./dokumen_tugas_p3md", log_
             drive_service = build('drive', 'v3')
         except Exception as e2:
             log_callback(f"⚠️ Info: Koneksi API Google Drive lokal/eksternal: {e} / {e2}")
-            # Jika tidak ada kredensial API Google Drive, tetap lanjut membaca file lokal yang ada di destination
             return 0, 0
 
     if progress_callback:
@@ -381,6 +433,27 @@ def sync_drive_folder(folder_url_or_id, destination="./dokumen_tugas_p3md", log_
 
     log_callback(f"📂 Ditemukan {len(items)} file di folder Google Drive.")
 
+    from googleapiclient.http import MediaIoBaseDownload
+
+    # 1. Cek & sinkronisasi file cache database atau laporan Excel dari Google Drive
+    for sync_fname in ["similarity_cache.db", "Turnitin_Similarity_Report_P3MD.xlsx"]:
+        remote_file = next((it for it in items if it['name'] == sync_fname), None)
+        if remote_file:
+            local_fpath = os.path.join(destination, sync_fname)
+            rem_size = int(remote_file.get('size', 0))
+            if not os.path.exists(local_fpath) or (rem_size > 0 and os.path.getsize(local_fpath) != rem_size):
+                log_callback(f"📦 Mengunduh {sync_fname} dari Google Drive...")
+                try:
+                    req = drive_service.files().get_media(fileId=remote_file['id'])
+                    with io.FileIO(local_fpath, 'wb') as fh:
+                        dl_tool = MediaIoBaseDownload(fh, req)
+                        d_flag = False
+                        while d_flag is False:
+                            _, d_flag = dl_tool.next_chunk()
+                    log_callback(f"✅ {sync_fname} berhasil disinkronkan dari Google Drive!")
+                except Exception as e:
+                    log_callback(f"⚠️ Gagal mengunduh {sync_fname}: {e}")
+
     downloaded = 0
     skipped = 0
     supported_exts = {".docx", ".pdf", ".txt"}
@@ -389,8 +462,6 @@ def sync_drive_folder(folder_url_or_id, destination="./dokumen_tugas_p3md", log_
         if os.path.splitext(item['name'])[1].lower() in supported_exts and not item['name'].startswith("~")
     ]
     total_eligible = len(eligible_items)
-
-    from googleapiclient.http import MediaIoBaseDownload
 
     for idx, item in enumerate(eligible_items):
         file_id = item['id']
@@ -432,6 +503,62 @@ def sync_drive_folder(folder_url_or_id, destination="./dokumen_tugas_p3md", log_
     log_callback(f"✅ Sinkronisasi selesai: {downloaded} file baru diunduh, {skipped} file sudah ada dilewati.")
     return downloaded, skipped
 
+def load_latest_leaderboard(target_dir="./dokumen_tugas_p3md"):
+    """
+    Memuat data laporan terbaru saat aplikasi pertama kali dibuka.
+    Mengecek direktori target, direktori saat ini, atau mengunduh baseline jika belum ada.
+    """
+    excel_candidates = [
+        os.path.join(target_dir, "Turnitin_Similarity_Report_P3MD.xlsx"),
+        "Turnitin_Similarity_Report_P3MD.xlsx"
+    ]
+    
+    excel_path = None
+    for p in excel_candidates:
+        if os.path.exists(p):
+            excel_path = p
+            break
+
+    # Jika file belum ada, coba unduh baseline dari GitHub raw
+    if not excel_path:
+        raw_url = "https://raw.githubusercontent.com/egxl/Turnitin_Similaritas_P3MD/main/Turnitin_Similarity_Report_P3MD.xlsx"
+        try:
+            import urllib.request
+            target_p = os.path.join(target_dir, "Turnitin_Similarity_Report_P3MD.xlsx")
+            os.makedirs(target_dir, exist_ok=True)
+            urllib.request.urlretrieve(raw_url, target_p)
+            if os.path.exists(target_p):
+                excel_path = target_p
+        except Exception:
+            pass
+
+    if excel_path and os.path.exists(excel_path):
+        try:
+            df = pd.read_excel(excel_path, sheet_name="👤 Rekap Per Peserta")
+            failed = sum(1 for s in df["Status Kelulusan"] if str(s).upper() == "FAIL")
+            passed = len(df) - failed
+            total_pairs = (len(df) * (len(df) - 1)) // 2
+            summary_md = f"""### 📊 Ringkasan Eksekutif Similaritas Cohort P3MD (Data Terbaru)
+- **Total Dokumen Peserta:** {len(df)} file
+- **Kelulusan Cohort:** ✅ **{passed} LULUS** ({passed/len(df)*100:.1f}%) | ❌ **{failed} MELEBIHI BATAS** ({failed/len(df)*100:.1f}%)
+- **Total Pasangan Diuji:** {total_pairs:,} pasang
+- ℹ️ *Data di bawah adalah hasil analisis tersimpan terbaru. Unggah file tugas baru ke Google Drive lalu klik tombol **"🚀 Mulai Analisis Similaritas / Cek Dokumen Baru"** untuk memperbarui data.*
+"""
+            return summary_md, df, excel_path
+        except Exception:
+            pass
+
+    # Fallback kosong jika benar-benar belum ada data sama sekali
+    empty_df = pd.DataFrame(columns=[
+        "Rank", "Nama Dokumen (Peserta)", "Status Kelulusan", "Skor Tertinggi (%)", 
+        "Kategori Turnitin", "Pasangan Paling Mirip (Top Match)", "Skor Match #1 (%)", 
+        "Pasangan Match #2", "Skor Match #2 (%)", "Rata-rata Similaritas Cohort (%)", 
+        "Jumlah Pasangan > Batas", "Total Kata"
+    ])
+    default_md = """### 📊 Ringkasan Eksekutif Similaritas Cohort P3MD
+Belum ada data analisis tersimpan. Silakan unggah file tugas ke Google Drive lalu klik tombol **"🚀 Mulai Analisis Similaritas / Cek Dokumen Baru"** di atas.
+"""
+    return default_md, empty_df, None
 
 def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_bib, force_recompute, progress=None):
     if progress is None and gr is not None:
@@ -476,8 +603,10 @@ def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_b
         return (
             f"⚠️ Ditemukan {len(file_paths)} dokumen di folder tugas. Minimal diperlukan 2 dokumen untuk analisis.\n\n"
             f"Silakan unggah dokumen ke folder Google Drive terlebih dahulu:\n{active_drive_url}",
-            None, 
-            None
+            pd.DataFrame(),
+            None,
+            pd.DataFrame(),
+            ""
         )
 
     # 3. Sinkronisasi SQLite Dokumen & Ekstraksi Teks (0.25 -> 0.50)
@@ -502,7 +631,7 @@ def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_b
         doc_db, k_val=int(min_words), threshold=float(pass_thresh), progress_callback=pair_prog_cb
     )
 
-    # 5. Buat Laporan Excel Komprehensif (0.85 -> 0.98)
+    # 5. Buat Laporan Excel Komprehensif (0.85 -> 0.95)
     progress(0.85, desc="Menyusun data rekapitulasi...")
     df_results = cache.get_results_dataframe(list(doc_db.keys()), k_val=int(min_words))
     
@@ -530,17 +659,37 @@ def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_b
     )
 
     # Hitung Leaderboard 1 Baris Per Peserta untuk Tampilan Web
-    progress(0.96, desc="Menghasilkan Leaderboard per peserta...")
+    progress(0.95, desc="Menghasilkan Leaderboard per peserta...")
     leaderboard = compute_leaderboard(df_results, threshold=float(pass_thresh))
+    for i, item in enumerate(leaderboard, 1):
+        item["Rank"] = i
+        item["Nama Dokumen (Peserta)"] = item["Dokumen"]
+        item["Pasangan Paling Mirip (Top Match)"] = item["Top Matched Document"]
+        item["Skor Match #1 (%)"] = item["Top Match Score (%)"]
+        item["Pasangan Match #2"] = item["2nd Matched Document"]
+        item["Skor Match #2 (%)"] = item["2nd Match Score (%)"]
+
     df_display = pd.DataFrame(leaderboard)[[
-        "Dokumen", "Status Kelulusan", "Skor Tertinggi (%)", 
-        "Kategori Turnitin", "Top Matched Document", "Top Match Score (%)", 
-        "Rata-rata Similaritas Cohort (%)", "Jumlah Pasangan > Batas"
+        "Rank", "Nama Dokumen (Peserta)", "Status Kelulusan", "Skor Tertinggi (%)", 
+        "Kategori Turnitin", "Pasangan Paling Mirip (Top Match)", "Skor Match #1 (%)", 
+        "Pasangan Match #2", "Skor Match #2 (%)", "Rata-rata Similaritas Cohort (%)", 
+        "Jumlah Pasangan > Batas", "Total Kata"
     ]]
+
+    # 6. Otomatis Unggah Cache Database dan Laporan Excel ke Google Drive (0.95 -> 0.99)
+    folder_id = extract_folder_id(active_drive_url)
+    drive_upload_success = False
+    if folder_id:
+        progress(0.97, desc="Mengunggah cache database ke Google Drive...")
+        up_db = upload_file_to_drive(db_path, folder_id, log_callback=log)
+        up_xl = upload_file_to_drive(excel_path, folder_id, log_callback=log)
+        drive_upload_success = up_db or up_xl
 
     failed_docs_count = sum(1 for d in leaderboard if d["Status Kelulusan"] == "FAIL")
     passed_docs_count = len(leaderboard) - failed_docs_count
     fail_pairs_count = len(df_results[df_results["Turnitin Max Score (%)"] > float(pass_thresh)])
+
+    sync_note = "☁️ **Cache database & Excel tersinkron ke Google Drive.**" if drive_upload_success else "💾 **Cache tersimpan secara lokal.**"
 
     summary_md = f"""### 📊 Ringkasan Eksekutif Similaritas Cohort P3MD
 - **Total Dokumen Peserta:** {len(doc_db)} file (📦 Dari Cache: {loaded_c}, 🆕 Baru Diunduh/Diproses: {new_c})
@@ -548,9 +697,10 @@ def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_b
 - **Total Pasangan Diuji:** {total_pairs:,} pasang (⚡ Dari Cache: {cached_pairs:,}, 🔍 Baru Dihitung: {new_pairs:,})
 - **Pasangan Melanggar Batas ({pass_thresh}%):** {fail_pairs_count} pasang
 - **Waktu Hemat:** ~{round((cached_pairs * 0.005) / 60, 1)} menit berkat SQLite Cache!
+- {sync_note}
 """
     progress(1.0, desc="Selesai!")
-    return summary_md, df_display, excel_path
+    return summary_md, df_display, excel_path, df_display, ""
 
 
 # Setup Antarmuka Gradio
@@ -558,7 +708,9 @@ def build_gradio_app():
     if gr is None:
         raise ImportError("Gradio belum terpasang. Silakan jalankan: pip install gradio")
 
-    with gr.Blocks(title="Turnitin Document Similarity - P3MD", theme=gr.themes.Soft()) as demo:
+    init_summary, init_df, init_excel = load_latest_leaderboard()
+
+    with gr.Blocks(title="Turnitin Document Similarity - P3MD", theme=gr.themes.Soft(), css=".dataframe-table { font-size: 13.5px !important; }") as demo:
         gr.Markdown("""
         # 🔍 Turnitin Document Similarity Checker (P3MD)
         **Sistem Deteksi Similaritas Dokumen Tugas Cohort P3MD Berbasis Standar Turnitin Resmi**
@@ -574,9 +726,9 @@ def build_gradio_app():
             2. **Jalankan Analisis Similaritas:**  
                Setelah file berhasil diunggah ke Google Drive, klik tombol **"🚀 Mulai Analisis Similaritas / Cek Dokumen Baru"**. Sistem akan otomatis mendeteksi dan mengunduh file baru Anda tanpa mengulang unduhan file lama.
             3. **Pantau Kemajuan (*Progress Bar*):**  
-               Bilah kemajuan di bagian atas akan menampilkan progres secara realtime mulai dari sinkronisasi Google Drive, ekstraksi teks dokumen, kalkulasi pasangan Turnitin, hingga penyusunan laporan Excel.
+               Bilah kemajuan di bagian atas akan menampilkan progres secara realtime mulai dari sinkronisasi Google Drive, ekstraksi teks dokumen, kalkulasi pasangan Turnitin, hingga auto-upload cache database.
             4. **Lihat Hasil & Unduh Laporan Excel:**  
-               Periksa peringkat kelulusan Anda pada tabel **Rekap Per Peserta (*Leaderboard*)** di bawah, dan klik tombol unduh untuk mengunduh laporan resmi Excel 7-Sheet lengkap.
+               Gunakan fitur **Cari Dokumen** di bawah untuk menemukan nama dokumen Anda pada tabel **Rekap Per Peserta (*Leaderboard*)**, dan klik tombol unduh untuk mengunduh laporan resmi Excel 7-Sheet lengkap.
             """)
 
             with gr.Row():
@@ -605,20 +757,52 @@ def build_gradio_app():
                 bib_cb = gr.Checkbox(value=True, label="Abaikan Daftar Pustaka")
                 force_cb = gr.Checkbox(value=False, label="Paksa Hitung Ulang Semua (Reset Cache)")
 
-        status_output = gr.Markdown()
+        status_output = gr.Markdown(value=init_summary)
         with gr.Row():
-            download_btn = gr.File(label="📥 Unduh Laporan Excel Resmi (Turnitin_Similarity_Report_P3MD.xlsx)")
+            download_btn = gr.File(
+                value=init_excel,
+                label="📥 Unduh Laporan Excel Resmi (Turnitin_Similarity_Report_P3MD.xlsx)"
+            )
         
+        # Search Bar & Filter Controls
+        with gr.Row():
+            search_input = gr.Textbox(
+                label="🔍 Cari Dokumen / Nama Peserta",
+                placeholder="Ketik nama file atau peserta untuk menyaring tabel (contoh: Fauzi, Tariq, Rayga, atau status: PASS/FAIL)...",
+                scale=5
+            )
+            reset_search_btn = gr.Button("🔄 Reset Pencarian", scale=1, variant="secondary")
+
+        # Full Page Recap Table
         table_output = gr.Dataframe(
+            value=init_df,
             label="👤 Rekap Hasil Per Peserta (Leaderboard 1 Baris Per Dokumen - Diurutkan dari Skor Tertinggi)",
             interactive=False,
-            wrap=True
+            wrap=True,
+            height=750
         )
+
+        current_df_state = gr.State(value=init_df)
+
+        def filter_table(query, full_df):
+            if full_df is None or len(full_df) == 0:
+                return full_df
+            if not query or not query.strip():
+                return full_df
+            q = query.strip().lower()
+            mask = full_df.astype(str).apply(lambda row: row.str.lower().str.contains(q, regex=False).any(), axis=1)
+            return full_df[mask]
+
+        def reset_search(full_df):
+            return "", full_df
+
+        search_input.change(fn=filter_table, inputs=[search_input, current_df_state], outputs=[table_output])
+        reset_search_btn.click(fn=reset_search, inputs=[current_df_state], outputs=[search_input, table_output])
 
         run_btn.click(
             fn=run_analysis_pipeline,
             inputs=[drive_input, min_words_slider, thresh_slider, quotes_cb, bib_cb, force_cb],
-            outputs=[status_output, table_output, download_btn]
+            outputs=[status_output, table_output, download_btn, current_df_state, search_input]
         )
 
     return demo
