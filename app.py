@@ -1194,15 +1194,21 @@ def check_single_document(file_obj, min_words=6, pass_thresh=PASS_THRESHOLD, dro
 
     cumulative_score = (len(valid_matched_indices) / len(words) * 100) if words else 0.0
     cum_badge_name, cum_badge_label = get_turnitin_tier(cumulative_score)
-    is_pass = (cumulative_score <= threshold)
+
+    top_doc = comparison_results[0]["Dokumen Pembanding"] if comparison_results else "-"
+    top_single_score = comparison_results[0]["Similaritas Naskah Anda (%)"] if comparison_results else 0.0
+    top_badge_name, top_badge_label = get_turnitin_tier(top_single_score)
+
+    # Standar Penilaian Resmi & Pencegahan False Positive (Selaras dengan Rekapitulasi Cohort Excel):
+    # Kelulusan ditentukan oleh sumber tunggal terbesar (Top Match). Jika naskah tidak menyalin > batas dari
+    # salah satu rekan, maka dokumen dinyatakan LULUS. Ini mencegah false positive akibat akumulasi template soal/UU
+    # yang tersebar di ratusan dokumen peserta.
+    is_pass = (top_single_score <= threshold)
 
     status_label = "✅ LULUS (PASS)" if is_pass else "❌ MELEBIHI BATAS (FAIL)"
     status_color = "#155724" if is_pass else "#721C24"
     bg_color = "#D4EDDA" if is_pass else "#F8D7DA"
     border_color = "#C3E6CB" if is_pass else "#F5C6CB"
-
-    top_doc = comparison_results[0]["Dokumen Pembanding"] if comparison_results else "-"
-    top_single_score = comparison_results[0]["Similaritas Naskah Anda (%)"] if comparison_results else 0.0
 
     # Lazy Passage Construction: Hanya untuk TOP 3 dokumen!
     for r in comparison_results[:3]:
@@ -1234,19 +1240,43 @@ def check_single_document(file_obj, min_words=6, pass_thresh=PASS_THRESHOLD, dro
         <i>Sistem otomatis memfilter draf lama Anda agar tidak dianggap sebagai plagiasi terhadap diri sendiri. Skor di bawah adalah perbandingan murni terhadap naskah rekan cohort lainnya.</i>
         </div>"""
 
-    summary_html = f"""<div style="background-color: {bg_color}; border: 1px solid {border_color}; border-radius: 8px; padding: 14px; margin-bottom: 12px; color: {status_color};">
-    <div style="font-size: 18px; font-weight: bold; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+    # Kotak Transparansi Metodologi Penilaian (Anti False-Positive)
+    if is_pass:
+        if cumulative_score > threshold:
+            transparency_box = f"""<div style="margin-top: 10px; padding: 10px 14px; background: rgba(13, 110, 253, 0.08); border-left: 4px solid #0d6efd; border-radius: 4px; font-size: 13px; color: #084298; line-height: 1.5;">
+                💡 <b>Transparansi Metodologi (Pencegahan False Positive):</b><br/>
+                • <b>Penentu Kelulusan (Standar Laporan Excel):</b> Status diukur dari <b>Sumber Tunggal Terbesar (Top Match)</b> terhadap satu rekan (<b>{top_single_score:.2f}%</b> &le; {threshold:.1f}%). Dokumen Anda dinyatakan <b>LULUS</b> karena tidak terindikasi menyalin naskah rekan tertentu.<br/>
+                • <b>Tentang Skor Kumulatif ({cumulative_score:.2f}%):</b> Angka ini adalah total gabungan kemiripan terhadap seluruh {len(comparison_results)} dokumen cohort. Dalam ujian bersama, skor kumulatif wajar terakumulasi dari template soal ujian, rujukan UU/peraturan desa, dan terminologi baku yang digunakan banyak peserta, bukan plagiasi individu.
+            </div>"""
+        else:
+            transparency_box = f"""<div style="margin-top: 10px; padding: 10px 14px; background: rgba(25, 135, 84, 0.08); border-left: 4px solid #198754; border-radius: 4px; font-size: 13px; color: #0f5132; line-height: 1.5;">
+                💡 <b>Transparansi Metodologi:</b> Baik kemiripan sumber tunggal terbesar (<b>{top_single_score:.2f}%</b>) maupun skor kumulatif cohort (<b>{cumulative_score:.2f}%</b>) berada di bawah ambang batas toleransi {threshold:.1f}%. Dokumen sepenuhnya bersih dari indikasi plagiasi.
+            </div>"""
+    else:
+        transparency_box = f"""<div style="margin-top: 10px; padding: 10px 14px; background: rgba(220, 53, 69, 0.08); border-left: 4px solid #dc3545; border-radius: 4px; font-size: 13px; color: #842029; line-height: 1.5;">
+            ⚠️ <b>Kemiripan Melebihi Batas Toleransi:</b><br/>
+            Terdeteksi kemiripan tinggi sebesar <b>{top_single_score:.2f}%</b> terhadap dokumen rekan <code>{top_doc}</code> (batas toleransi: {threshold:.1f}%). Silakan periksa cuplikan teks identik pada bagian <i>Bukti Cuplikan Teks</i> di bawah untuk direvisi atau diparafrase.
+        </div>"""
+
+    summary_html = f"""<div style="background-color: {bg_color}; border: 1px solid {border_color}; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; color: {status_color};">
+    <div style="font-size: 18px; font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
         <span>Status: {status_label}</span>
-        <span style="font-size: 15px; font-weight: bold; background: rgba(0,0,0,0.06); padding: 4px 10px; border-radius: 6px;">
-            Skor Kumulatif Turnitin: {cumulative_score:.2f}% ({cum_badge_label})
-        </span>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <span style="font-size: 13px; font-weight: bold; background: rgba(0,0,0,0.06); padding: 4px 10px; border-radius: 6px;">
+                🎯 Top Match: {top_single_score:.2f}% ({top_badge_label})
+            </span>
+            <span style="font-size: 13px; font-weight: bold; background: rgba(0,0,0,0.06); padding: 4px 10px; border-radius: 6px;">
+                🌐 Kumulatif Turnitin: {cumulative_score:.2f}% ({cum_badge_label})
+            </span>
+        </div>
     </div>
     <div style="font-size: 13.5px; line-height: 1.6;">
         <b>Nama Dokumen:</b> <code>{uploaded_name}</code> ({len(words):,} kata) &nbsp;|&nbsp; 
         Dibandingkan terhadap: <b>{len(comparison_results)}</b> dokumen cohort &nbsp;|&nbsp; 
         Batas Toleransi: <b>{threshold:.1f}%</b><br/>
-        <b>Sumber Tunggal Terbesar (Top Match):</b> <code>{top_doc}</code> (<b>{top_single_score:.2f}%</b>)
+        <b>Sumber Tunggal Terbesar (Top Match):</b> <code>{top_doc}</code> (<b>{top_single_score:.2f}%</b> &mdash; Status: <b>{'PASS' if top_single_score <= threshold else 'FAIL'}</b>)
     </div>
+    {transparency_box}
     {self_match_notice}
 </div>"""
 
@@ -1316,6 +1346,8 @@ def build_gradio_app():
                 gr.Markdown("""
                 ### ⚡ Pemeriksaan Mandiri & Instan Naskah Tugas
                 Unggah draf naskah tugas Anda langsung di sini untuk memeriksa tingkat kemiripan Turnitin terhadap seluruh basis data cohort P3MD dalam hitungan detik, **tanpa perlu menunggu antrean sinkronisasi seluruh angkatan**.
+
+                > 💡 **Standar Kelulusan Bebas False Positive:** Selaras dengan Laporan Resmi Excel, status kelulusan dinilai dari **Sumber Tunggal Terbesar (Top Match)**. Hal ini memastikan naskah Anda tidak dinyatakan gagal secara keliru (*false positive*) hanya karena akumulasi template soal, sitasi UU/regulasi desa, atau format baku yang tersebar di ratusan peserta cohort.
                 """)
                 with gr.Row():
                     with gr.Column(scale=4):
@@ -1330,7 +1362,7 @@ def build_gradio_app():
                 with gr.Accordion("⚙️ Pengaturan Cek Mandiri (Opsional)", open=False):
                     with gr.Row():
                         s_min_words = gr.Slider(minimum=4, maximum=12, value=6, step=1, label="Min Consecutive Words (Standar Turnitin: 6)")
-                        s_thresh = gr.Slider(minimum=5.0, maximum=50.0, value=15.0, step=1.0, label="Batas Toleransi Kelulusan (%)")
+                        s_thresh = gr.Slider(minimum=5.0, maximum=50.0, value=15.0, step=1.0, label="Batas Toleransi Sumber Tunggal (%) (Standar Excel: 15.0%)")
                     with gr.Row():
                         s_quotes = gr.Checkbox(value=True, label="Abaikan Kutipan (\" \")")
                         s_bib = gr.Checkbox(value=True, label="Abaikan Daftar Pustaka")
@@ -1341,6 +1373,7 @@ def build_gradio_app():
                     interactive=False,
                     wrap=True
                 )
+                single_passages_md = gr.Markdown()
                 single_click_kwargs = {}
                 btn_click_params = inspect.signature(single_run_btn.click).parameters
                 if "concurrency_limit" in btn_click_params:
