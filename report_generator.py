@@ -125,8 +125,21 @@ def compute_leaderboard(df_pairs, threshold=15.0):
         all_docs.add(d2)
 
         max_s = float(r.get("Turnitin Max Score (%)") or r.get("Max Score") or 0.0)
-        status = r.get("Status Kelulusan") or r.get("Status") or "PASS"
         blocks = r.get("Jumlah Blok Teks Cocok") or r.get("Matches") or 0
+
+        # Skor spesifik dokumen (directional score dari masing-masing perspektif)
+        s1_val = r.get("Doc 1 Cocok di Doc 2 (%)")
+        if s1_val is None:
+            s1_val = r.get("Score A")
+        s1 = float(s1_val) if s1_val is not None else max_s
+
+        s2_val = r.get("Doc 2 Cocok di Doc 1 (%)")
+        if s2_val is None:
+            s2_val = r.get("Score B")
+        s2 = float(s2_val) if s2_val is not None else max_s
+
+        status_1 = "FAIL" if s1 > threshold else "PASS"
+        status_2 = "FAIL" if s2 > threshold else "PASS"
 
         # Doc 1 stats
         w1 = r.get("Total Kata Doc 1") or r.get("Words A") or 0
@@ -146,15 +159,15 @@ def compute_leaderboard(df_pairs, threshold=15.0):
         # Record match from d1 perspective
         doc_matches[d1].append({
             "partner": d2,
-            "score": max_s,
-            "status": status,
+            "score": s1,
+            "status": status_1,
             "blocks": blocks
         })
         # Record match from d2 perspective
         doc_matches[d2].append({
             "partner": d1,
-            "score": max_s,
-            "status": status,
+            "score": s2,
+            "status": status_2,
             "blocks": blocks
         })
 
@@ -403,6 +416,7 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
     # -------------------------------------------------------------------------
     ws_lead = wb.create_sheet("👤 Rekap Per Peserta")
     ws_lead.views.sheetView[0].showGridLines = True
+    ws_lead.sheet_format.defaultRowHeight = 20
     
     lead_headers = [
         "Rank", "Nama Dokumen (Peserta)", "Status Kelulusan", "Skor Tertinggi (%)", 
@@ -474,7 +488,6 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
 
         for cell in row_cells:
             cell.border = BORDER_BOX
-        ws_lead.row_dimensions[r_num].height = 20
 
     ws_lead.freeze_panes = "A2"
     ws_lead.auto_filter.ref = ws_lead.dimensions
@@ -486,6 +499,7 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
     # -------------------------------------------------------------------------
     ws_flag = wb.create_sheet("⚠️ Investigasi Plagiasi")
     ws_flag.views.sheetView[0].showGridLines = True
+    ws_flag.sheet_format.defaultRowHeight = 28
 
     flag_headers = [
         "No.", "Dokumen 1", "Dokumen 2", "Turnitin Max Score (%)", "Status", 
@@ -548,7 +562,6 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
 
         for cell in row_cells:
             cell.border = BORDER_BOX
-        ws_flag.row_dimensions[r_num].height = 30
 
     if flag_idx == 0:
         ws_flag.append(["-", "Selamat! Tidak ada pasangan dokumen yang melebihi batas kelulusan.", "", "", "ALL PASS", "", "", "", "", "", "", ""])
@@ -623,6 +636,7 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
     # -------------------------------------------------------------------------
     ws_pass = wb.create_sheet("📝 Detail Kalimat Identik")
     ws_pass.views.sheetView[0].showGridLines = True
+    ws_pass.sheet_format.defaultRowHeight = 24
 
     pass_headers = [
         "Dokumen 1", "Dokumen 2", "Status Pasangan", "Skor Max (%)", 
@@ -631,12 +645,12 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
     ws_pass.append(pass_headers)
     style_header_row(ws_pass, 1, len(pass_headers), fill=NAVY_HEADER_FILL)
 
-    # Populate matched passages with priority given to FAIL pairs
+    # Populate matched passages with priority given to FAIL pairs (dibatasi 500 teratas agar hemat memori)
     if matched_passages:
         passages_sorted = sorted(
             matched_passages, 
             key=lambda x: (0 if x.get("status") == "FAIL" else 1, -float(str(x.get("score", 0)).replace("%", "")))
-        )
+        )[:500]
         for p_item in passages_sorted:
             r_num = ws_pass.max_row + 1
             text_val = p_item.get("text", "")
@@ -668,7 +682,6 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
 
             for cell in row_cells:
                 cell.border = BORDER_BOX
-            ws_pass.row_dimensions[r_num].height = 24
 
     ws_pass.freeze_panes = "A2"
     ws_pass.auto_filter.ref = ws_pass.dimensions
@@ -786,9 +799,19 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
     ws_meta.freeze_panes = "A2"
     auto_fit_columns(ws_meta, min_w=15, max_w=65)
 
-    # Simpan file
-    wb.save(output_file)
-    return output_file
+    # Simpan file dengan penanganan kunci berkas (PermissionError) jika sedang dibuka di Excel
+    try:
+        wb.save(output_file)
+        return output_file
+    except PermissionError:
+        base, ext = os.path.splitext(output_file)
+        fallback_file = f"{base}_update{ext}"
+        try:
+            wb.save(fallback_file)
+            print(f"⚠️ Berkas {output_file} sedang dibuka di aplikasi lain/Excel! Disimpan sebagai alternatif: {fallback_file}")
+            return fallback_file
+        except Exception:
+            raise
 
 
 if __name__ == "__main__":

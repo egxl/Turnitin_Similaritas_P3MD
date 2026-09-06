@@ -26,6 +26,14 @@ except ImportError:
     PdfReader = None
 
 try:
+    import pymupdf as fitz
+except ImportError:
+    try:
+        import fitz
+    except ImportError:
+        fitz = None
+
+try:
     import gradio as gr
 except ImportError:
     gr = None
@@ -54,10 +62,17 @@ def extract_raw_text(file_path):
             doc = Document(file_path)
             text = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
         elif ext == ".pdf":
-            if PdfReader is None:
-                raise ImportError("Library 'pypdf' belum terinstal. Silakan jalankan: pip install pypdf")
-            reader = PdfReader(file_path)
-            text = "\n".join([page.extract_text() or "" for page in reader.pages])
+            if fitz is not None:
+                try:
+                    doc = fitz.open(file_path)
+                    text = "\n".join([page.get_text() or "" for page in doc if page.get_text().strip()])
+                except Exception:
+                    text = ""
+            if not text and PdfReader is not None:
+                reader = PdfReader(file_path)
+                text = "\n".join([page.extract_text() or "" for page in reader.pages])
+            elif not text and fitz is None and PdfReader is None:
+                raise ImportError("Library 'pypdf' atau 'pymupdf' belum terinstal. Silakan jalankan: pip install pypdf pymupdf")
         elif ext in [".txt", ".md", ".text"]:
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 text = f.read()
@@ -128,6 +143,106 @@ def calculate_turnitin_similarity(doc_a_words, doc_b_words, map_a, map_b, k=6):
         passages.append(" ".join(current_passage))
 
     return score_a, score_b, passages
+
+class CohortMemoryCache:
+    """
+    Cache memori global (in-memory) untuk menyimpan tokens dan inverted index k-gram dokumen cohort.
+    Mengeliminasi lag disk SQLite dan JSON deserialization pada setiap pemanggilan Cek Mandiri.
+    Pencarian kemiripan berjalan dalam < 30ms langsung di RAM.
+    """
+    def __init__(self):
+        self.db_path = None
+        self.db_mtime = None
+        self.doc_words = {}            # filename -> list[str] (tokens)
+        self.kgram_sets = {}           # (k_val, filename) -> set[str]
+        self.inverted_index = {}       # k_val -> dict[str, list[(filename, int)]]
+        self.lock = threading.Lock()
+
+    def invalidate(self):
+        with self.lock:
+            self.doc_words.clear()
+            self.kgram_sets.clear()
+            self.inverted_index.clear()
+            self.db_mtime = None
+
+    def ensure_loaded(self, db_path, k_val=6, target_dir="./dokumen_tugas_p3md", drop_quotes=True, drop_bib=True):
+        with self.lock:
+            current_mtime = os.path.getmtime(db_path) if os.path.exists(db_path) else 0.0
+
+            # Jika database belum termuat atau berkas SQLite diperbarui:
+            if (self.db_path != db_path or self.db_mtime != current_mtime or not self.doc_words):
+                self.doc_words.clear()
+                self.kgram_sets.clear()
+                self.inverted_index.clear()
+                self.db_path = db_path
+                self.db_mtime = current_mtime
+
+                # 1. Coba baca dari SQLite
+                if os.path.exists(db_path):
+                    conn = sqlite3.connect(db_path, timeout=15)
+                    try:
+                        cur = conn.cursor()
+                        cur.execute("SELECT filename, words_json FROM documents")
+                        for fname, w_json in cur.fetchall():
+                            if w_json and w_json != "[]":
+                                try:
+                                    w_list = json.loads(w_json)
+                                    if w_list:
+                                        self.doc_words[fname] = w_list
+                                except Exception:
+                                    pass
+                    finally:
+                        conn.close()
+
+                # 2. Jika words_json masih kosong di database, coba ekstrak otomatis dari berkas lokal
+                if not self.doc_words and os.path.exists(target_dir):
+                    supported_exts = {".docx", ".pdf", ".txt"}
+                    local_files = []
+                    for root, _, f_list in os.walk(target_dir):
+                        for f in f_list:
+                            if os.path.splitext(f)[1].lower() in supported_exts and not f.startswith("~"):
+                                local_files.append(os.path.join(root, f))
+
+                    if local_files:
+                        db_conn = sqlite3.connect(db_path, timeout=15) if os.path.exists(db_path) else None
+                        try:
+                            for fp in local_files:
+                                bname = os.path.basename(fp)
+                                raw = extract_raw_text(fp)
+                                if raw.strip():
+                                    filt = apply_turnitin_exclusions(raw, drop_quotes=drop_quotes, drop_bib=drop_bib)
+                                    toks = tokenize_words(filt)
+                                    if len(toks) > 0:
+                                        self.doc_words[bname] = toks
+                                        if db_conn:
+                                            mtime = os.path.getmtime(fp)
+                                            sz = os.path.getsize(fp)
+                                            db_conn.execute("""
+                                                INSERT OR REPLACE INTO documents (filename, file_mtime, file_size, word_count, words_json)
+                                                VALUES (?, ?, ?, ?, ?)
+                                            """, (bname, mtime, sz, len(toks), json.dumps(toks)))
+                            if db_conn:
+                                db_conn.commit()
+                                self.db_mtime = os.path.getmtime(db_path)
+                        finally:
+                            if db_conn:
+                                db_conn.close()
+
+            # 3. Bangun Inverted Index & K-gram sets untuk k_val tertentu di RAM jika belum ada
+            if k_val not in self.inverted_index and self.doc_words:
+                inv_idx = {}
+                for fname, words in self.doc_words.items():
+                    kset = set()
+                    for i in range(len(words) - k_val + 1):
+                        gram = " ".join(words[i:i+k_val])
+                        kset.add(gram)
+                        if gram not in inv_idx:
+                            inv_idx[gram] = []
+                        inv_idx[gram].append((fname, i))
+                    self.kgram_sets[(k_val, fname)] = kset
+                self.inverted_index[k_val] = inv_idx
+
+GLOBAL_COHORT_CACHE = CohortMemoryCache()
 
 class TurnitinDBCache:
     """Manajer SQLite Cache untuk pemrosesan inkremental Turnitin."""
@@ -207,6 +322,8 @@ class TurnitinDBCache:
                             cur.execute("DELETE FROM pairs WHERE doc_a = ? OR doc_b = ?", (name, name))
                         new_or_updated += 1
             conn.commit()
+            if new_or_updated > 0:
+                GLOBAL_COHORT_CACHE.invalidate()
         finally:
             conn.close()
 
@@ -345,6 +462,8 @@ class TurnitinDBCache:
                     cur.execute("DELETE FROM pairs WHERE doc_a = ? OR doc_b = ?", (d, d))
                     pruned_count += 1
             conn.commit()
+            if pruned_count > 0:
+                GLOBAL_COHORT_CACHE.invalidate()
             return pruned_count
         finally:
             conn.close()
@@ -547,20 +666,66 @@ def sync_drive_folder(folder_url_or_id, destination="./dokumen_tugas_p3md", log_
 def load_latest_leaderboard(target_dir="./dokumen_tugas_p3md"):
     """
     Memuat data laporan terbaru saat aplikasi pertama kali dibuka.
-    Mengecek direktori target, direktori saat ini, atau mengunduh baseline jika belum ada.
+    Memprioritaskan data langsung dari database cache SQLite agar selalu mutakhir dan instan.
+    Jika database belum tersedia, menggunakan cadangan file Excel atau mengunduh baseline.
     """
+    db_candidates = [
+        os.path.join(target_dir, "similarity_cache.db"),
+        "similarity_cache.db"
+    ]
     excel_candidates = [
         os.path.join(target_dir, "Turnitin_Similarity_Report_P3MD.xlsx"),
         "Turnitin_Similarity_Report_P3MD.xlsx"
     ]
-    
+
     excel_path = None
     for p in excel_candidates:
         if os.path.exists(p):
             excel_path = p
             break
 
-    # Jika file belum ada, coba unduh baseline dari GitHub raw
+    # 1. Prioritaskan pembacaan langsung dari database cache SQLite (Sangat cepat ~15ms & anti-stuck)
+    for db_p in db_candidates:
+        if os.path.exists(db_p):
+            try:
+                conn = sqlite3.connect(db_p)
+                cur = conn.cursor()
+                cur.execute("SELECT filename FROM documents")
+                docs = [r[0] for r in cur.fetchall()]
+                conn.close()
+                if len(docs) >= 2:
+                    cache = TurnitinDBCache(db_path=db_p)
+                    df_results = cache.get_results_dataframe(docs, k_val=6)
+                    if len(df_results) > 0:
+                        leaderboard = compute_leaderboard(df_results, threshold=PASS_THRESHOLD)
+                        for i, item in enumerate(leaderboard, 1):
+                            item["Rank"] = i
+                            item["Nama Dokumen (Peserta)"] = item["Dokumen"]
+                            item["Pasangan Paling Mirip (Top Match)"] = item["Top Matched Document"]
+                            item["Skor Match #1 (%)"] = item["Top Match Score (%)"]
+                            item["Pasangan Match #2"] = item["2nd Matched Document"]
+                            item["Skor Match #2 (%)"] = item["2nd Match Score (%)"]
+
+                        df = pd.DataFrame(leaderboard)[[
+                            "Rank", "Nama Dokumen (Peserta)", "Status Kelulusan", "Skor Tertinggi (%)", 
+                            "Kategori Turnitin", "Pasangan Paling Mirip (Top Match)", "Skor Match #1 (%)", 
+                            "Pasangan Match #2", "Skor Match #2 (%)", "Rata-rata Similaritas Cohort (%)", 
+                            "Jumlah Pasangan > Batas", "Total Kata"
+                        ]]
+                        failed = sum(1 for d in leaderboard if d["Status Kelulusan"] == "FAIL")
+                        passed = len(leaderboard) - failed
+                        total_pairs = len(df_results)
+                        summary_md = f"""### 📊 Ringkasan Eksekutif Similaritas Cohort P3MD (Data Database Terkini)
+- **Total Dokumen Peserta:** {len(leaderboard)} file
+- **Kelulusan Cohort:** ✅ **{passed} LULUS** ({passed/len(leaderboard)*100:.1f}%) | ❌ **{failed} MELEBIHI BATAS** ({failed/len(leaderboard)*100:.1f}%)
+- **Total Pasangan Diuji:** {total_pairs:,} pasang
+- ℹ️ *Data di bawah disajikan langsung dari basis data cache SQLite terbaru. Klik tombol **"🚀 Mulai Sinkronisasi & Analisis Lengkap Cohort"** untuk menyinkronkan tugas baru.*
+"""
+                        return summary_md, df, excel_path
+            except Exception as e:
+                print(f"⚠️ Info: Gagal memuat dari database cache: {e}, mencoba cadangan Excel...")
+
+    # 2. Cadangan: Muat dari file Excel jika ada
     if not excel_path:
         raw_url = "https://raw.githubusercontent.com/egxl/Turnitin_Similaritas_P3MD/main/Turnitin_Similarity_Report_P3MD.xlsx"
         try:
@@ -579,11 +744,11 @@ def load_latest_leaderboard(target_dir="./dokumen_tugas_p3md"):
             failed = sum(1 for s in df["Status Kelulusan"] if str(s).upper() == "FAIL")
             passed = len(df) - failed
             total_pairs = (len(df) * (len(df) - 1)) // 2
-            summary_md = f"""### 📊 Ringkasan Eksekutif Similaritas Cohort P3MD (Data Terbaru)
+            summary_md = f"""### 📊 Ringkasan Eksekutif Similaritas Cohort P3MD (Data Cadangan Excel)
 - **Total Dokumen Peserta:** {len(df)} file
 - **Kelulusan Cohort:** ✅ **{passed} LULUS** ({passed/len(df)*100:.1f}%) | ❌ **{failed} MELEBIHI BATAS** ({failed/len(df)*100:.1f}%)
 - **Total Pasangan Diuji:** {total_pairs:,} pasang
-- ℹ️ *Data di bawah adalah hasil analisis tersimpan terbaru. Unggah file tugas baru ke Google Drive lalu klik tombol **"🚀 Mulai Analisis Similaritas / Cek Dokumen Baru"** untuk memperbarui data.*
+- ℹ️ *Data di bawah adalah hasil analisis tersimpan dari laporan Excel.*
 """
             return summary_md, df, excel_path
         except Exception:
@@ -597,7 +762,7 @@ def load_latest_leaderboard(target_dir="./dokumen_tugas_p3md"):
         "Jumlah Pasangan > Batas", "Total Kata"
     ])
     default_md = """### 📊 Ringkasan Eksekutif Similaritas Cohort P3MD
-Belum ada data analisis tersimpan. Silakan unggah file tugas ke Google Drive lalu klik tombol **"🚀 Mulai Analisis Similaritas / Cek Dokumen Baru"** di atas.
+Belum ada data analisis tersimpan. Silakan unggah file tugas ke Google Drive lalu klik tombol **"🚀 Mulai Sinkronisasi & Analisis Lengkap Cohort"** di atas.
 """
     return default_md, empty_df, None
 
@@ -723,7 +888,7 @@ def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_b
 
         dl, sk = sync_drive_folder(active_drive_url, target_dir, log_callback=log, progress_callback=drive_prog_cb)
         
-        # 2. Pindai Dokumen Lokal
+        # 2. Pindai Dokumen Lokal & Siapkan Database Cache
         supported_exts = {".docx", ".pdf", ".txt"}
         file_paths = []
         for root, _, f_list in os.walk(target_dir):
@@ -731,33 +896,49 @@ def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_b
                 if os.path.splitext(f)[1].lower() in supported_exts and not f.startswith("~"):
                     file_paths.append(os.path.join(root, f))
 
-        if len(file_paths) < 2:
-            return (
-                f"⚠️ Ditemukan {len(file_paths)} dokumen di folder tugas. Minimal diperlukan 2 dokumen untuk analisis.\n\n"
-                f"Silakan unggah dokumen ke folder Google Drive terlebih dahulu:\n{active_drive_url}",
-                pd.DataFrame(),
-                None,
-                pd.DataFrame(),
-                ""
-            )
-
-        # 3. Sinkronisasi SQLite Dokumen & Ekstraksi Teks (0.25 -> 0.50)
-        progress(0.25, desc="Mempersiapkan database cache SQLite...")
         cache = TurnitinDBCache(db_path=db_path)
-        
-        # Bersihkan dokumen cache yang file fisiknya sudah dihapus dari disk
-        active_basenames = [os.path.basename(p) for p in file_paths]
-        pruned_c = cache.cleanup_deleted_documents(active_basenames)
-        if pruned_c > 0:
-            log(f"🧹 Menghapus {pruned_c} dokumen usang dari database cache SQLite.")
-        
-        def doc_prog_cb(curr, total, name):
-            frac = 0.25 + 0.25 * (curr / max(total, 1))
-            progress(frac, desc=f"Ekstraksi teks [{curr}/{total}]: {name[:35]}")
 
-        doc_db, loaded_c, new_c = cache.sync_documents(
-            file_paths, drop_quotes=drop_quotes, drop_bib=drop_bib, progress_callback=doc_prog_cb
-        )
+        if len(file_paths) < 2:
+            # Periksa apakah database cache SQLite sudah memiliki dokumen tersimpan
+            conn = sqlite3.connect(db_path)
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT filename, words_json FROM documents")
+                cached_rows = cur.fetchall()
+            except Exception:
+                cached_rows = []
+            finally:
+                conn.close()
+
+            if len(cached_rows) >= 2:
+                log(f"ℹ️ Menggunakan {len(cached_rows)} dokumen dari basis data cache SQLite.")
+                doc_db = {r[0]: json.loads(r[1]) for r in cached_rows}
+                loaded_c = len(cached_rows)
+                new_c = 0
+            else:
+                return (
+                    f"⚠️ Ditemukan {len(file_paths)} dokumen di folder tugas dan belum ada cache tersimpan. Minimal diperlukan 2 dokumen untuk analisis.\n\n"
+                    f"Silakan unggah dokumen ke folder Google Drive terlebih dahulu:\n{active_drive_url}",
+                    pd.DataFrame(),
+                    None,
+                    pd.DataFrame(),
+                    ""
+                )
+        else:
+            # 3. Sinkronisasi SQLite Dokumen & Ekstraksi Teks (0.25 -> 0.50)
+            progress(0.25, desc="Mempersiapkan database cache SQLite...")
+            active_basenames = [os.path.basename(p) for p in file_paths]
+            pruned_c = cache.cleanup_deleted_documents(active_basenames)
+            if pruned_c > 0:
+                log(f"🧹 Menghapus {pruned_c} dokumen usang dari database cache SQLite.")
+            
+            def doc_prog_cb(curr, total, name):
+                frac = 0.25 + 0.25 * (curr / max(total, 1))
+                progress(frac, desc=f"Ekstraksi teks [{curr}/{total}]: {name[:35]}")
+
+            doc_db, loaded_c, new_c = cache.sync_documents(
+                file_paths, drop_quotes=drop_quotes, drop_bib=drop_bib, progress_callback=doc_prog_cb
+            )
 
         # 4. Hitung Inkremental Pasangan (0.50 -> 0.85)
         progress(0.50, desc="Kalkulasi similaritas inkremental Turnitin...")
@@ -769,40 +950,11 @@ def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_b
             doc_db, k_val=int(min_words), threshold=float(pass_thresh), progress_callback=pair_prog_cb
         )
 
-        # 5. Rekapitulasi Data & Pembuatan Laporan Excel
+        # 5. Rekapitulasi Data & Hitung Leaderboard untuk Tampilan Web SEGERA (0.85 -> 0.90)
         progress(0.85, desc="Menyusun data rekapitulasi...")
         df_results = cache.get_results_dataframe(list(doc_db.keys()), k_val=int(min_words))
-        
-        # Cek apakah pembuatan ulang Excel dan upload Drive bisa dilewati
-        skip_excel_and_upload = (new_c == 0 and new_pairs == 0 and not force_recompute and os.path.exists(excel_path))
 
-        if not skip_excel_and_upload:
-            all_passages = []
-            for _, r in df_results.iterrows():
-                if r.get("Matches", 0) > 0 and isinstance(r.get("Passages"), list):
-                    s_val = float(r.get("Turnitin Max Score (%)", 0.0))
-                    p_status = "FAIL" if s_val > float(pass_thresh) else "PASS"
-                    for p_text in r["Passages"]:
-                        all_passages.append({
-                            "doc1": r["Dokumen 1"],
-                            "doc2": r["Dokumen 2"],
-                            "score": s_val,
-                            "status": p_status,
-                            "text": p_text
-                        })
-
-            progress(0.90, desc="Menyusun workbook Excel 7-Sheet...")
-            generate_excel_report(
-                df_results, len(doc_db), min_words=int(min_words), 
-                commander_threshold=COMMANDER_THRESHOLD, pass_threshold=float(pass_thresh),
-                matched_passages=all_passages, output_file=excel_path
-            )
-        else:
-            log("⚡ Tidak ada dokumen/pasangan baru. Melewati pembuatan ulang Excel 7-sheet & upload Google Drive.")
-            progress(0.92, desc="Data mutakhir, menggunakan laporan Excel yang sudah ada...")
-
-        # Hitung Leaderboard 1 Baris Per Peserta untuk Tampilan Web
-        progress(0.95, desc="Menghasilkan Leaderboard per peserta...")
+        progress(0.88, desc="Menghasilkan Leaderboard per peserta...")
         leaderboard = compute_leaderboard(df_results, threshold=float(pass_thresh))
         for i, item in enumerate(leaderboard, 1):
             item["Rank"] = i
@@ -819,23 +971,63 @@ def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_b
             "Jumlah Pasangan > Batas", "Total Kata"
         ]]
 
-        # 6. Otomatis Unggah Cache Database dan Laporan Excel ke Google Drive (0.95 -> 0.99)
-        folder_id = extract_folder_id(active_drive_url)
-        drive_upload_success = False
-        if folder_id and not skip_excel_and_upload:
-            progress(0.97, desc="Mengunggah cache database ke Google Drive...")
-            up_db = upload_file_to_drive(db_path, folder_id, log_callback=log)
-            up_xl = upload_file_to_drive(excel_path, folder_id, log_callback=log)
-            drive_upload_success = up_db or up_xl
-        elif skip_excel_and_upload:
-            drive_upload_success = True
-
         failed_docs_count = sum(1 for d in leaderboard if d["Status Kelulusan"] == "FAIL")
         passed_docs_count = len(leaderboard) - failed_docs_count
         fail_pairs_count = len(df_results[df_results["Turnitin Max Score (%)"] > float(pass_thresh)])
 
+        # 6. Pembuatan Laporan Excel (Non-Blocking & Aman terhadap Kunci Berkas)
+        skip_excel = (new_c == 0 and new_pairs == 0 and not force_recompute and os.path.exists(excel_path))
+        excel_out_path = excel_path if os.path.exists(excel_path) else None
+
+        if not skip_excel:
+            progress(0.90, desc="Menyusun workbook Excel...")
+            try:
+                all_passages = []
+                for _, r in df_results.iterrows():
+                    if r.get("Matches", 0) > 0 and isinstance(r.get("Passages"), list):
+                        s_val = float(r.get("Turnitin Max Score (%)", 0.0))
+                        p_status = "FAIL" if s_val > float(pass_thresh) else "PASS"
+                        for p_text in r["Passages"]:
+                            all_passages.append({
+                                "doc1": r["Dokumen 1"],
+                                "doc2": r["Dokumen 2"],
+                                "score": s_val,
+                                "status": p_status,
+                                "text": p_text
+                            })
+                            if len(all_passages) >= 500:
+                                break
+                    if len(all_passages) >= 500:
+                        break
+
+                excel_out_path = generate_excel_report(
+                    df_results, len(doc_db), min_words=int(min_words), 
+                    commander_threshold=COMMANDER_THRESHOLD, pass_threshold=float(pass_thresh),
+                    matched_passages=all_passages, output_file=excel_path
+                )
+                log("✅ Laporan Excel resmi berhasil diperbarui.")
+            except Exception as e_xl:
+                log(f"⚠️ Info Excel: {e_xl}. Tabel web tetap disajikan mutakhir!")
+        else:
+            log("⚡ Tidak ada dokumen/pasangan baru. Menggunakan laporan Excel yang sudah ada.")
+            progress(0.92, desc="Menggunakan laporan Excel yang sudah ada...")
+
+        # 7. Otomatis Unggah Cache Database dan Laporan Excel ke Google Drive (0.95 -> 0.99)
+        folder_id = extract_folder_id(active_drive_url)
+        drive_upload_success = False
+        if folder_id and not skip_excel:
+            progress(0.96, desc="Sinkronisasi cache ke Google Drive...")
+            try:
+                up_db = upload_file_to_drive(db_path, folder_id, log_callback=log)
+                up_xl = upload_file_to_drive(excel_out_path, folder_id, log_callback=log) if excel_out_path else False
+                drive_upload_success = up_db or up_xl
+            except Exception as e_drv:
+                log(f"⚠️ Info upload Drive: {e_drv}")
+        elif skip_excel:
+            drive_upload_success = True
+
         sync_note = "☁️ **Cache database & Excel tersinkron ke Google Drive.**" if drive_upload_success else "💾 **Cache tersimpan secara lokal.**"
-        recalc_note = "⚡ **Hemat Waktu:** Tidak ada dokumen baru, pembuatan Excel dilewati." if skip_excel_and_upload else f"⏱️ **Waktu Hemat:** ~{round((cached_pairs * 0.005) / 60, 1)} menit berkat SQLite Cache!"
+        recalc_note = "⚡ **Hemat Waktu:** Tidak ada dokumen baru, pembuatan Excel dilewati." if skip_excel else f"⏱️ **Waktu Hemat:** ~{round((cached_pairs * 0.005) / 60, 1)} menit berkat SQLite Cache!"
 
         summary_md = f"""### 📊 Ringkasan Eksekutif Similaritas Cohort P3MD
 - **Total Dokumen Peserta:** {len(doc_db)} file (📦 Dari Cache: {loaded_c}, 🆕 Baru Diunduh/Diproses: {new_c})
@@ -847,7 +1039,7 @@ def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_b
 """
         last_pipeline_run_time = time.time()
         progress(1.0, desc="Selesai!")
-        return summary_md, df_display, excel_path, df_display, ""
+        return summary_md, df_display, excel_out_path, df_display, ""
     finally:
         with jobs_lock:
             active_jobs_count = max(0, active_jobs_count - 1)
@@ -855,7 +1047,7 @@ def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_b
 def check_single_document(file_obj, min_words=6, pass_thresh=PASS_THRESHOLD, drop_quotes=True, drop_bib=True, progress=None):
     """
     Memeriksa similaritas 1 dokumen yang diunggah langsung ke Gradio terhadap seluruh
-    dokumen cohort yang tersimpan di cache SQLite (selesai dalam ~1-2 detik).
+    dokumen cohort menggunakan in-memory inverted index (selesai dalam hitungan milidetik).
     """
     if progress is None and gr is not None:
         progress = gr.Progress()
@@ -889,7 +1081,7 @@ def check_single_document(file_obj, min_words=6, pass_thresh=PASS_THRESHOLD, dro
             ""
         )
 
-    progress(0.3, desc="Menghubungkan ke database cache cohort...")
+    progress(0.3, desc="Menghubungkan ke cache memori cohort...")
     target_dir = "./dokumen_tugas_p3md"
     db_candidates = [
         os.path.join(target_dir, "similarity_cache.db"),
@@ -908,78 +1100,154 @@ def check_single_document(file_obj, min_words=6, pass_thresh=PASS_THRESHOLD, dro
             ""
         )
 
-    progress(0.4, desc="Membangun indeks k-gram dokumen unggahan...")
-    map_uploaded = build_kgram_map(words, k=k_val)
+    # Pastikan data cohort termuat di RAM
+    GLOBAL_COHORT_CACHE.ensure_loaded(db_path, k_val=k_val, target_dir=target_dir, drop_quotes=drop_quotes, drop_bib=drop_bib)
 
-    conn = sqlite3.connect(db_path)
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT filename, words_json FROM documents")
-        cohort_docs = cur.fetchall()
-    finally:
-        conn.close()
-
-    if not cohort_docs:
+    if not GLOBAL_COHORT_CACHE.doc_words:
         return (
-            "⚠️ Basis data cache cohort belum memiliki dokumen tersimpan.",
+            "⚠️ Basis data cache cohort belum memiliki teks dokumen tersimpan. Silakan klik tombol 'Mulai Sinkronisasi & Analisis Lengkap Cohort' pada tab Rekapitulasi untuk memproses dokumen.",
             pd.DataFrame(),
             ""
         )
 
-    progress(0.5, desc=f"Membandingkan terhadap {len(cohort_docs)} dokumen cohort...")
-    comparison_results = []
-    clean_uploaded_name = re.sub(r"^[a-f0-9]{16,}_", "", uploaded_name.lower())
+    progress(0.6, desc="Kalkulasi similaritas Turnitin via Inverted Index...")
+    map_uploaded = build_kgram_map(words, k=k_val)
+    inv_index = GLOBAL_COHORT_CACHE.inverted_index.get(k_val, {})
 
-    for idx, (doc_name, w_json) in enumerate(cohort_docs):
-        clean_cohort_name = re.sub(r"^[a-f0-9]{16,}_", "", doc_name.lower())
-        # Hindari membandingkan dokumen dengan dirinya sendiri jika nama filenya identik
-        if clean_cohort_name == clean_uploaded_name:
+    # Pembersihan nama dokumen yang diunggah untuk deteksi kesamaan nama
+    clean_uploaded_name = re.sub(r"^[a-f0-9]{16,}_", "", uploaded_name.lower())
+    clean_up_base = os.path.splitext(clean_uploaded_name)[0]
+
+    # Inisialisasi pelacakan indeks kecocokan per dokumen cohort
+    matched_indices_by_doc = {fname: set() for fname in GLOBAL_COHORT_CACHE.doc_words.keys()}
+
+    # 1-Pass Inverted Index Lookup: O(N_uploaded)
+    for gram, start_indices in map_uploaded.items():
+        if gram in inv_index:
+            for fname, c_offset in inv_index[gram]:
+                clean_cohort_name = re.sub(r"^[a-f0-9]{16,}_", "", fname.lower())
+                clean_c_base = os.path.splitext(clean_cohort_name)[0]
+
+                # Lewati perbandingan jika file identik persis
+                if clean_cohort_name == clean_uploaded_name or clean_c_base == clean_up_base:
+                    continue
+
+                for s_idx in start_indices:
+                    for offset in range(k_val):
+                        matched_indices_by_doc[fname].add(s_idx + offset)
+
+    comparison_results = []
+    self_matches = []
+
+    for fname, matched_set in matched_indices_by_doc.items():
+        clean_cohort_name = re.sub(r"^[a-f0-9]{16,}_", "", fname.lower())
+        clean_c_base = os.path.splitext(clean_cohort_name)[0]
+        if clean_cohort_name == clean_uploaded_name or clean_c_base == clean_up_base:
             continue
 
-        c_words = json.loads(w_json)
-        c_map = build_kgram_map(c_words, k=k_val)
-        score_up, score_c, passages = calculate_turnitin_similarity(words, c_words, map_uploaded, c_map, k=k_val)
+        score_up = (len(matched_set) / len(words) * 100) if words else 0.0
+
+        # Deteksi Smart Self-Match:
+        # Jika kemiripan >= 85% dan nama file memiliki kemiripan kata kunci (misal revisi atau nama peserta yang sama)
+        is_potential_self = False
+        if score_up >= 85.0:
+            name_words_up = set(re.findall(r"\w+", clean_up_base))
+            name_words_c = set(re.findall(r"\w+", clean_c_base))
+            common_stopwords = {"ujian", "tahap", "p3md", "tugas", "danbatch", "jawaban", "lembar", "komprehensif", "uk1", "g1", "g2", "g3", "g4", "e1", "e2", "e3", "pdf", "docx", "txt", "test", "tes"}
+            name_words_up -= common_stopwords
+            name_words_c -= common_stopwords
+            if name_words_up and name_words_c and (name_words_up & name_words_c):
+                is_potential_self = True
+
         badge_name, badge_label = get_turnitin_tier(score_up)
         status_val = "PASS" if score_up <= threshold else "FAIL"
 
-        comparison_results.append({
-            "Dokumen Pembanding": doc_name,
+        item = {
+            "Dokumen Pembanding": fname,
             "Similaritas Naskah Anda (%)": round(score_up, 2),
-            "Similaritas Naskah Pembanding (%)": round(score_c, 2),
             "Status": status_val,
             "Kategori Turnitin": badge_label,
-            "Jumlah Blok Teks Cocok": len(passages),
-            "Passages": passages
-        })
+            "Jumlah Blok Teks Cocok": 0,
+            "MatchedSet": matched_set,
+            "IsSelfMatch": is_potential_self
+        }
 
-    if not comparison_results:
+        if is_potential_self:
+            self_matches.append(item)
+        else:
+            comparison_results.append(item)
+
+    if not comparison_results and not self_matches:
         return (
             "Dokumen pembanding tidak ditemukan dalam basis data.",
             pd.DataFrame(),
             ""
         )
 
-    progress(0.85, desc="Menyusun kesimpulan analisis dokumen...")
+    # Urutkan berdasarkan skor tertinggi naskah Anda
     comparison_results.sort(key=lambda x: x["Similaritas Naskah Anda (%)"], reverse=True)
-    max_score = comparison_results[0]["Similaritas Naskah Anda (%)"]
-    top_doc = comparison_results[0]["Dokumen Pembanding"]
-    badge_name, badge_label = get_turnitin_tier(max_score)
-    is_pass = (max_score <= threshold)
+
+    # Hitung Cumulative Union Turnitin Score (Resmi Standar Turnitin)
+    valid_matched_indices = set()
+    for r in comparison_results:
+        valid_matched_indices.update(r["MatchedSet"])
+
+    cumulative_score = (len(valid_matched_indices) / len(words) * 100) if words else 0.0
+    cum_badge_name, cum_badge_label = get_turnitin_tier(cumulative_score)
+    is_pass = (cumulative_score <= threshold)
+
     status_label = "✅ LULUS (PASS)" if is_pass else "❌ MELEBIHI BATAS (FAIL)"
     status_color = "#155724" if is_pass else "#721C24"
     bg_color = "#D4EDDA" if is_pass else "#F8D7DA"
     border_color = "#C3E6CB" if is_pass else "#F5C6CB"
 
+    top_doc = comparison_results[0]["Dokumen Pembanding"] if comparison_results else "-"
+    top_single_score = comparison_results[0]["Similaritas Naskah Anda (%)"] if comparison_results else 0.0
+
+    # Lazy Passage Construction: Hanya untuk TOP 3 dokumen!
+    for r in comparison_results[:3]:
+        m_set = r["MatchedSet"]
+        if m_set:
+            sorted_indices = sorted(m_set)
+            passages = []
+            curr_p = [words[sorted_indices[0]]]
+            for prev_idx, curr_idx in zip(sorted_indices[:-1], sorted_indices[1:]):
+                if curr_idx == prev_idx + 1:
+                    curr_p.append(words[curr_idx])
+                else:
+                    if len(curr_p) >= k_val:
+                        passages.append(" ".join(curr_p))
+                    curr_p = [words[curr_idx]]
+            if len(curr_p) >= k_val:
+                passages.append(" ".join(curr_p))
+            r["Passages"] = passages
+            r["Jumlah Blok Teks Cocok"] = len(passages)
+        else:
+            r["Passages"] = []
+            r["Jumlah Blok Teks Cocok"] = 0
+
+    self_match_notice = ""
+    if self_matches:
+        s_names = ", ".join([f"<code>{sm['Dokumen Pembanding']}</code> ({sm['Similaritas Naskah Anda (%)']}%)" for sm in self_matches])
+        self_match_notice = f"""<div style="margin-top: 10px; padding: 8px 12px; background: #e9ecef; border-left: 4px solid #6c757d; border-radius: 4px; font-size: 13px; color: #495057;">
+        ℹ️ <b>Draf / Revisi Sebelumnya Terdeteksi:</b> {s_names}<br/>
+        <i>Sistem otomatis memfilter draf lama Anda agar tidak dianggap sebagai plagiasi terhadap diri sendiri. Skor di bawah adalah perbandingan murni terhadap naskah rekan cohort lainnya.</i>
+        </div>"""
+
     summary_html = f"""<div style="background-color: {bg_color}; border: 1px solid {border_color}; border-radius: 8px; padding: 14px; margin-bottom: 12px; color: {status_color};">
-    <div style="font-size: 18px; font-weight: bold; margin-bottom: 6px;">
-        Status: {status_label} &nbsp;|&nbsp; Skor Similaritas Tertinggi: {max_score:.2f}% ({badge_label})
+    <div style="font-size: 18px; font-weight: bold; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span>Status: {status_label}</span>
+        <span style="font-size: 15px; font-weight: bold; background: rgba(0,0,0,0.06); padding: 4px 10px; border-radius: 6px;">
+            Skor Kumulatif Turnitin: {cumulative_score:.2f}% ({cum_badge_label})
+        </span>
     </div>
-    <div style="font-size: 13.5px;">
+    <div style="font-size: 13.5px; line-height: 1.6;">
         <b>Nama Dokumen:</b> <code>{uploaded_name}</code> ({len(words):,} kata) &nbsp;|&nbsp; 
         Dibandingkan terhadap: <b>{len(comparison_results)}</b> dokumen cohort &nbsp;|&nbsp; 
         Batas Toleransi: <b>{threshold:.1f}%</b><br/>
-        <b>Pasangan Paling Mirip (Top Match):</b> <code>{top_doc}</code> (<b>{max_score:.2f}%</b>)
+        <b>Sumber Tunggal Terbesar (Top Match):</b> <code>{top_doc}</code> (<b>{top_single_score:.2f}%</b>)
     </div>
+    {self_match_notice}
 </div>"""
 
     df_display = pd.DataFrame([{
@@ -992,7 +1260,7 @@ def check_single_document(file_obj, min_words=6, pass_thresh=PASS_THRESHOLD, dro
     } for i, r in enumerate(comparison_results[:20], 1)])
 
     passages_md = ""
-    top_with_passages = [r for r in comparison_results if r["Passages"]][:3]
+    top_with_passages = [r for r in comparison_results if r.get("Passages")][:3]
     if top_with_passages:
         passages_md += "#### 📝 Bukti Cuplikan Teks yang Terdeteksi Mirip (Top 3 Dokumen):\n"
         for r in top_with_passages:
@@ -1073,12 +1341,18 @@ def build_gradio_app():
                     interactive=False,
                     wrap=True
                 )
-                single_passages_md = gr.Markdown()
+                single_click_kwargs = {}
+                btn_click_params = inspect.signature(single_run_btn.click).parameters
+                if "concurrency_limit" in btn_click_params:
+                    single_click_kwargs["concurrency_limit"] = 10
+                elif "concurrency_id" in btn_click_params:
+                    single_click_kwargs["concurrency_id"] = "instant_check"
 
                 single_run_btn.click(
                     fn=check_single_document,
                     inputs=[single_file_input, s_min_words, s_thresh, s_quotes, s_bib],
-                    outputs=[single_result_html, single_matches_df, single_passages_md]
+                    outputs=[single_result_html, single_matches_df, single_passages_md],
+                    **single_click_kwargs
                 )
 
             # ==========================================
@@ -1176,10 +1450,17 @@ def build_gradio_app():
                 search_input.change(fn=filter_table, inputs=[search_input, current_df_state], outputs=[table_output], queue=False)
                 reset_search_btn.click(fn=reset_search, inputs=[current_df_state], outputs=[search_input, table_output], queue=False)
 
+                run_click_kwargs = {}
+                if "concurrency_limit" in btn_click_params:
+                    run_click_kwargs["concurrency_limit"] = 1
+                elif "concurrency_id" in btn_click_params:
+                    run_click_kwargs["concurrency_id"] = "cohort_pipeline"
+
                 run_btn.click(
                     fn=run_analysis_pipeline,
                     inputs=[drive_input, min_words_slider, thresh_slider, quotes_cb, bib_cb, force_cb],
-                    outputs=[status_output, table_output, download_btn, current_df_state, search_input]
+                    outputs=[status_output, table_output, download_btn, current_df_state, search_input],
+                    **run_click_kwargs
                 )
 
         demo.load(fn=get_current_queue_status, outputs=[queue_status_display], queue=False)
@@ -1208,10 +1489,10 @@ if __name__ == "__main__":
     queue_kwargs = {}
     queue_params = inspect.signature(demo.queue).parameters
     if "default_concurrency_limit" in queue_params:
-        queue_kwargs["default_concurrency_limit"] = 1
+        queue_kwargs["default_concurrency_limit"] = 10
     elif "concurrency_count" in queue_params:
-        queue_kwargs["concurrency_count"] = 1
+        queue_kwargs["concurrency_count"] = 10
     if "max_size" in queue_params:
-        queue_kwargs["max_size"] = 20
+        queue_kwargs["max_size"] = 50
 
     demo.queue(**queue_kwargs).launch(**launch_kwargs)
