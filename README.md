@@ -44,12 +44,18 @@ Aplikasi pendeteksi similaritas dokumen berbasis standar Turnitin resmi yang dio
 
 ## 🚀 Cara Menjalankan
 
-### Cara 1: Menggunakan Google Colab (Paling Cepat & Direkomendasikan)
+### Cara 1: Menggunakan Google Colab (Web UI - Direkomendasikan)
 1. Buka notebook di [Google Colab](https://colab.research.google.com/github/egxl/Turnitin_Similaritas_P3MD/blob/main/Turnitin_Similaritas_P3MD.ipynb).
 2. Klik menu **Runtime > Run all** (`Ctrl + F9`).
-3. Pada sel terakhir (**Sel 5: Antarmuka Web Interaktif**), buka tautan publik yang muncul (contoh: `https://xxxxxxxx.gradio.live`).
+3. Pada **Sel 5: Antarmuka Web Interaktif**, buka tautan publik yang muncul (contoh: `https://xxxxxxxx.gradio.live`).
 4. Tempelkan link folder Google Drive dan klik tombol **"🚀 Analisis Similaritas / Cek Dokumen Baru"**.
 5. Unduh file Excel laporan `Turnitin_Similarity_Report_P3MD.xlsx`.
+
+### Cara 2: Eksekusi Langsung Tanpa Web UI (Batch Mode)
+Jika hanya ingin menjalankan analisis langsung di Colab tanpa membuka antarmuka web:
+1. Pada **Sel 6: Alternatif: Eksekusi Langsung Tanpa Web UI (Batch Mode)**, centang opsi `jalankan_batch_mode`.
+2. Masukkan link folder Google Drive pada kolom `direct_drive_url`.
+3. Klik tombol Run pada sel tersebut. Dokumen akan langsung dianalisis dan laporan Excel akan diunduh secara otomatis.
 
 ---
 
