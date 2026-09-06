@@ -45,6 +45,16 @@ BORDER_TOP_BOTTOM = Border(top=THIN_GRAY, bottom=THIN_GRAY)
 DOUBLE_BOTTOM = Side(style="double", color="1F4E79")
 BORDER_CARD_BOTTOM = Border(left=THIN_GRAY, right=THIN_GRAY, top=THIN_GRAY, bottom=DOUBLE_BOTTOM)
 
+# Shared Alignments & Number Formats (pre-instantiated for 30x faster generation)
+ALIGN_CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
+ALIGN_CENTER_NOWRAP = Alignment(horizontal="center", vertical="center")
+ALIGN_RIGHT = Alignment(horizontal="right", vertical="center")
+ALIGN_LEFT = Alignment(horizontal="left", vertical="center")
+ALIGN_LEFT_WRAP = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+NUM_FMT_PERCENT = '0.00"%"'
+NUM_FMT_INT = '#,##0'
+
 # Badges Turnitin
 BADGE_STYLES = {
     "Blue": (PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid"), Font(name="Segoe UI", size=10, bold=True, color="004085")),
@@ -71,21 +81,27 @@ def style_header_row(ws, row_idx, num_cols, fill=NAVY_HEADER_FILL, font=HEADER_F
         cell = ws.cell(row=row_idx, column=c)
         cell.fill = fill
         cell.font = font
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.alignment = ALIGN_CENTER
         cell.border = BORDER_BOX
     ws.row_dimensions[row_idx].height = 28
 
-def auto_fit_columns(ws, min_w=12, max_w=65):
-    for col in ws.columns:
-        col_letter = get_column_letter(col[0].column)
+def auto_fit_columns(ws, min_w=12, max_w=65, sample_rows=100):
+    """
+    Menyesuaikan lebar kolom secara cerdas dan cepat.
+    Menggunakan sampling hingga 100 baris pertama untuk menghindari lag pada puluhan ribu baris.
+    """
+    max_r = min(ws.max_row, sample_rows)
+    for col_idx in range(1, ws.max_column + 1):
+        col_letter = get_column_letter(col_idx)
         max_len = 0
-        for cell in col:
-            val_str = str(cell.value or "")
-            if "\n" in val_str:
-                lines = val_str.split("\n")
-                max_len = max(max_len, max(len(l) for l in lines))
-            else:
-                max_len = max(max_len, len(val_str))
+        for r in range(1, max_r + 1):
+            val = ws.cell(row=r, column=col_idx).value
+            if val is not None:
+                s_val = str(val)
+                if "\n" in s_val:
+                    max_len = max(max_len, max(len(l) for l in s_val.split("\n")))
+                else:
+                    max_len = max(max_len, len(s_val))
         ws.column_dimensions[col_letter].width = min(max(max_len + 3, min_w), max_w)
 
 
@@ -93,33 +109,39 @@ def compute_leaderboard(df_pairs, threshold=15.0):
     """
     Menghitung rekapitulasi per dokumen (1 baris per dokumen).
     Memproses setiap dokumen terhadap seluruh pasangannya dalam cohort.
+    Menggunakan to_dict('records') untuk efisiensi O(N).
     """
+    records = df_pairs.to_dict('records') if hasattr(df_pairs, 'to_dict') else df_pairs
     all_docs = set()
-    for _, row in df_pairs.iterrows():
-        all_docs.add(row["Dokumen 1"])
-        all_docs.add(row["Dokumen 2"])
-
-    leaderboard = []
-    # Build pairwise lookup map
-    doc_matches = {doc: [] for doc in all_docs}
+    doc_matches = {}
     doc_word_counts = {}
 
-    for _, r in df_pairs.iterrows():
-        d1 = r["Dokumen 1"]
-        d2 = r["Dokumen 2"]
-        max_s = float(r.get("Turnitin Max Score (%)", r.get("Max Score", 0.0)))
-        status = r.get("Status Kelulusan", r.get("Status", "PASS"))
-        blocks = r.get("Jumlah Blok Teks Cocok", r.get("Matches", 0))
+    for r in records:
+        d1 = r.get("Dokumen 1")
+        d2 = r.get("Dokumen 2")
+        if not d1 or not d2:
+            continue
+        all_docs.add(d1)
+        all_docs.add(d2)
+
+        max_s = float(r.get("Turnitin Max Score (%)") or r.get("Max Score") or 0.0)
+        status = r.get("Status Kelulusan") or r.get("Status") or "PASS"
+        blocks = r.get("Jumlah Blok Teks Cocok") or r.get("Matches") or 0
 
         # Doc 1 stats
-        w1 = r.get("Total Kata Doc 1", r.get("Words A", 0))
+        w1 = r.get("Total Kata Doc 1") or r.get("Words A") or 0
         if w1 and d1 not in doc_word_counts:
             doc_word_counts[d1] = w1
 
         # Doc 2 stats
-        w2 = r.get("Total Kata Doc 2", r.get("Words B", 0))
+        w2 = r.get("Total Kata Doc 2") or r.get("Words B") or 0
         if w2 and d2 not in doc_word_counts:
             doc_word_counts[d2] = w2
+
+        if d1 not in doc_matches:
+            doc_matches[d1] = []
+        if d2 not in doc_matches:
+            doc_matches[d2] = []
 
         # Record match from d1 perspective
         doc_matches[d1].append({
@@ -136,6 +158,7 @@ def compute_leaderboard(df_pairs, threshold=15.0):
             "blocks": blocks
         })
 
+    leaderboard = []
     for doc, matches in doc_matches.items():
         if not matches:
             continue
@@ -173,19 +196,23 @@ def compute_leaderboard(df_pairs, threshold=15.0):
 def build_two_way_comparisons(df_pairs):
     """
     Membangun tabel komparasi dua arah (Target vs Pembanding).
-    Memudahkan peserta memfilter 1 dokumen target untuk melihat seluruh 397 lawannya.
+    Memudahkan peserta memfilter 1 dokumen target untuk melihat seluruh lawannya.
+    Menggunakan to_dict('records') untuk kecepatan maksimal.
     """
+    records = df_pairs.to_dict('records') if hasattr(df_pairs, 'to_dict') else df_pairs
     two_way = []
-    for _, r in df_pairs.iterrows():
-        d1 = r["Dokumen 1"]
-        d2 = r["Dokumen 2"]
-        max_s = float(r.get("Turnitin Max Score (%)", r.get("Max Score", 0.0)))
-        status = r.get("Status Kelulusan", r.get("Status", "PASS"))
-        badge = r.get("Kategori Turnitin", r.get("Badge", "-"))
-        blocks = r.get("Jumlah Blok Teks Cocok", r.get("Matches", 0))
+    for r in records:
+        d1 = r.get("Dokumen 1")
+        d2 = r.get("Dokumen 2")
+        if not d1 or not d2:
+            continue
+        max_s = float(r.get("Turnitin Max Score (%)") or r.get("Max Score") or 0.0)
+        status = r.get("Status Kelulusan") or r.get("Status") or "PASS"
+        badge = r.get("Kategori Turnitin") or r.get("Badge") or "-"
+        blocks = r.get("Jumlah Blok Teks Cocok") or r.get("Matches") or 0
 
-        s1 = r.get("Doc 1 Cocok di Doc 2 (%)", r.get("Score A", max_s))
-        s2 = r.get("Doc 2 Cocok di Doc 1 (%)", r.get("Score B", max_s))
+        s1 = float(r.get("Doc 1 Cocok di Doc 2 (%)") or r.get("Score A") or max_s)
+        s2 = float(r.get("Doc 2 Cocok di Doc 1 (%)") or r.get("Score B") or max_s)
 
         # Baris dari perspektif Dokumen 1
         two_way.append({
@@ -469,23 +496,24 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
     style_header_row(ws_flag, 1, len(flag_headers), fill=DARK_RED_HEADER_FILL)
 
     flag_idx = 0
-    for _, r in df_results.iterrows():
-        max_s = float(r.get("Turnitin Max Score (%)", r.get("Max Score", 0.0)))
+    df_records_all = df_results.to_dict('records') if hasattr(df_results, 'to_dict') else df_results
+    for r in df_records_all:
+        max_s = float(r.get("Turnitin Max Score (%)") or r.get("Max Score") or 0.0)
         if max_s <= pass_threshold:
             continue
 
         flag_idx += 1
         r_num = ws_flag.max_row + 1
 
-        d1 = r["Dokumen 1"]
-        d2 = r["Dokumen 2"]
-        status = r.get("Status Kelulusan", r.get("Status", "FAIL"))
-        badge = r.get("Kategori Turnitin", r.get("Badge", "-"))
-        s1 = float(r.get("Doc 1 Cocok di Doc 2 (%)", r.get("Score A", max_s)))
-        s2 = float(r.get("Doc 2 Cocok di Doc 1 (%)", r.get("Score B", max_s)))
-        w1 = r.get("Total Kata Doc 1", r.get("Words A", 0))
-        w2 = r.get("Total Kata Doc 2", r.get("Words B", 0))
-        blocks = r.get("Jumlah Blok Teks Cocok", r.get("Matches", 0))
+        d1 = r.get("Dokumen 1")
+        d2 = r.get("Dokumen 2")
+        status = r.get("Status Kelulusan") or r.get("Status") or "FAIL"
+        badge = r.get("Kategori Turnitin") or r.get("Badge") or "-"
+        s1 = float(r.get("Doc 1 Cocok di Doc 2 (%)") or r.get("Score A") or max_s)
+        s2 = float(r.get("Doc 2 Cocok di Doc 1 (%)") or r.get("Score B") or max_s)
+        w1 = r.get("Total Kata Doc 1") or r.get("Words A") or 0
+        w2 = r.get("Total Kata Doc 2") or r.get("Words B") or 0
+        blocks = r.get("Jumlah Blok Teks Cocok") or r.get("Matches") or 0
 
         # Analisis rasio & arah dugaan
         if abs(s1 - s2) > 10 and w1 and w2:
@@ -500,23 +528,23 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
             flag_idx, d1, d2, max_s, status, badge, s1, s2, w1, w2, blocks, indikasi
         ])
 
-        # Styling
+        # Fast styling
         row_cells = [ws_flag.cell(row=r_num, column=c) for c in range(1, len(flag_headers) + 1)]
-        row_cells[0].alignment = Alignment(horizontal="center")
-        row_cells[3].alignment = Alignment(horizontal="right")
-        row_cells[3].number_format = '0.00"%"'
-        row_cells[4].alignment = Alignment(horizontal="center")
+        row_cells[0].alignment = ALIGN_CENTER_NOWRAP
+        row_cells[3].alignment = ALIGN_RIGHT
+        row_cells[3].number_format = NUM_FMT_PERCENT
+        row_cells[4].alignment = ALIGN_CENTER_NOWRAP
         row_cells[4].fill = FAIL_FILL
         row_cells[4].font = FAIL_FONT
-        row_cells[5].alignment = Alignment(horizontal="center")
-        row_cells[6].alignment = Alignment(horizontal="right")
-        row_cells[6].number_format = '0.00"%"'
-        row_cells[7].alignment = Alignment(horizontal="right")
-        row_cells[7].number_format = '0.00"%"'
-        row_cells[8].alignment = Alignment(horizontal="right")
-        row_cells[9].alignment = Alignment(horizontal="right")
-        row_cells[10].alignment = Alignment(horizontal="center")
-        row_cells[11].alignment = Alignment(vertical="center", wrap_text=True)
+        row_cells[5].alignment = ALIGN_CENTER_NOWRAP
+        row_cells[6].alignment = ALIGN_RIGHT
+        row_cells[6].number_format = NUM_FMT_PERCENT
+        row_cells[7].alignment = ALIGN_RIGHT
+        row_cells[7].number_format = NUM_FMT_PERCENT
+        row_cells[8].alignment = ALIGN_RIGHT
+        row_cells[9].alignment = ALIGN_RIGHT
+        row_cells[10].alignment = ALIGN_CENTER_NOWRAP
+        row_cells[11].alignment = ALIGN_LEFT_WRAP
 
         for cell in row_cells:
             cell.border = BORDER_BOX
@@ -536,6 +564,7 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
     # -------------------------------------------------------------------------
     ws_inspect = wb.create_sheet("🔍 Cek Dokumen Individu")
     ws_inspect.views.sheetView[0].showGridLines = True
+    ws_inspect.sheet_format.defaultRowHeight = 19
 
     inspect_headers = [
         "Dokumen Target (Filter Nama Anda Di Sini)", "Dokumen Pembanding", 
@@ -546,40 +575,43 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
     style_header_row(ws_inspect, 1, len(inspect_headers), fill=TEAL_HEADER_FILL)
 
     two_way_data = build_two_way_comparisons(df_results)
-    for r_data in two_way_data:
-        r_num = ws_inspect.max_row + 1
+    for r_idx, r_data in enumerate(two_way_data, 2):
+        status = r_data["Status Kelulusan"]
         ws_inspect.append([
             r_data["Dokumen Target"],
             r_data["Dokumen Pembanding"],
             r_data["Turnitin Max Score (%)"],
-            r_data["Status Kelulusan"],
+            status,
             r_data["Kategori Turnitin"],
             r_data["Kemiripan Target di Pembanding (%)"],
             r_data["Kemiripan Pembanding di Target (%)"],
             r_data["Jumlah Blok Cocok"]
         ])
 
-        row_cells = [ws_inspect.cell(row=r_num, column=c) for c in range(1, len(inspect_headers) + 1)]
-        row_cells[2].alignment = Alignment(horizontal="right")
-        row_cells[2].number_format = '0.00"%"'
-        row_cells[3].alignment = Alignment(horizontal="center")
-        row_cells[4].alignment = Alignment(horizontal="center")
-        row_cells[5].alignment = Alignment(horizontal="right")
-        row_cells[5].number_format = '0.00"%"'
-        row_cells[6].alignment = Alignment(horizontal="right")
-        row_cells[6].number_format = '0.00"%"'
-        row_cells[7].alignment = Alignment(horizontal="center")
+        c_score = ws_inspect.cell(row=r_idx, column=3)
+        c_score.alignment = ALIGN_RIGHT
+        c_score.number_format = NUM_FMT_PERCENT
 
-        if r_data["Status Kelulusan"] == "FAIL":
-            row_cells[3].fill = FAIL_FILL
-            row_cells[3].font = FAIL_FONT
-        else:
-            row_cells[3].fill = PASS_FILL
-            row_cells[3].font = PASS_FONT
+        c_status = ws_inspect.cell(row=r_idx, column=4)
+        c_status.alignment = ALIGN_CENTER_NOWRAP
 
-        for cell in row_cells:
-            cell.border = BORDER_BOX
-        ws_inspect.row_dimensions[r_num].height = 19
+        c_badge = ws_inspect.cell(row=r_idx, column=5)
+        c_badge.alignment = ALIGN_CENTER_NOWRAP
+
+        c_s1 = ws_inspect.cell(row=r_idx, column=6)
+        c_s1.alignment = ALIGN_RIGHT
+        c_s1.number_format = NUM_FMT_PERCENT
+
+        c_s2 = ws_inspect.cell(row=r_idx, column=7)
+        c_s2.alignment = ALIGN_RIGHT
+        c_s2.number_format = NUM_FMT_PERCENT
+
+        c_blocks = ws_inspect.cell(row=r_idx, column=8)
+        c_blocks.alignment = ALIGN_CENTER_NOWRAP
+
+        if status == "FAIL":
+            c_status.fill = FAIL_FILL
+            c_status.font = FAIL_FONT
 
     ws_inspect.freeze_panes = "A2"
     ws_inspect.auto_filter.ref = ws_inspect.dimensions
@@ -601,7 +633,6 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
 
     # Populate matched passages with priority given to FAIL pairs
     if matched_passages:
-        # Sort matched passages so FAIL pairs come first
         passages_sorted = sorted(
             matched_passages, 
             key=lambda x: (0 if x.get("status") == "FAIL" else 1, -float(str(x.get("score", 0)).replace("%", "")))
@@ -622,11 +653,11 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
             ])
 
             row_cells = [ws_pass.cell(row=r_num, column=c) for c in range(1, len(pass_headers) + 1)]
-            row_cells[2].alignment = Alignment(horizontal="center")
-            row_cells[3].alignment = Alignment(horizontal="right")
-            row_cells[3].number_format = '0.00"%"'
-            row_cells[4].alignment = Alignment(horizontal="center")
-            row_cells[5].alignment = Alignment(vertical="center", wrap_text=True)
+            row_cells[2].alignment = ALIGN_CENTER_NOWRAP
+            row_cells[3].alignment = ALIGN_RIGHT
+            row_cells[3].number_format = NUM_FMT_PERCENT
+            row_cells[4].alignment = ALIGN_CENTER_NOWRAP
+            row_cells[5].alignment = ALIGN_LEFT_WRAP
 
             if p_item.get("status") == "FAIL":
                 row_cells[2].fill = FAIL_FILL
@@ -649,6 +680,7 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
     # -------------------------------------------------------------------------
     ws_all = wb.create_sheet("📋 Semua Pasangan (Arsip)")
     ws_all.views.sheetView[0].showGridLines = True
+    ws_all.sheet_format.defaultRowHeight = 19
 
     all_headers = [
         "No.", "Dokumen 1", "Dokumen 2", "Turnitin Max Score (%)", "Status Kelulusan", 
@@ -658,49 +690,58 @@ def generate_excel_report(df_results, total_docs, min_words=6, commander_thresho
     ws_all.append(all_headers)
     style_header_row(ws_all, 1, len(all_headers), fill=NAVY_HEADER_FILL)
 
-    for idx, (_, r) in enumerate(df_results.iterrows(), 1):
-        r_num = ws_all.max_row + 1
-        max_s = float(r.get("Turnitin Max Score (%)", r.get("Max Score", 0.0)))
-        status = r.get("Status Kelulusan", r.get("Status", "PASS"))
-        badge = r.get("Kategori Turnitin", r.get("Badge", "-"))
-        s1 = float(r.get("Doc 1 Cocok di Doc 2 (%)", r.get("Score A", max_s)))
-        s2 = float(r.get("Doc 2 Cocok di Doc 1 (%)", r.get("Score B", max_s)))
-        w1 = r.get("Total Kata Doc 1", r.get("Words A", "-"))
-        w2 = r.get("Total Kata Doc 2", r.get("Words B", "-"))
-        blocks = r.get("Jumlah Blok Teks Cocok", r.get("Matches", 0))
+    for idx, r in enumerate(df_records_all, 1):
+        r_num = idx + 1
+        max_s = float(r.get("Turnitin Max Score (%)") or r.get("Max Score") or 0.0)
+        status = r.get("Status Kelulusan") or r.get("Status") or "PASS"
+        badge = r.get("Kategori Turnitin") or r.get("Badge") or "-"
+        s1 = float(r.get("Doc 1 Cocok di Doc 2 (%)") or r.get("Score A") or max_s)
+        s2 = float(r.get("Doc 2 Cocok di Doc 1 (%)") or r.get("Score B") or max_s)
+        w1 = r.get("Total Kata Doc 1") or r.get("Words A") or "-"
+        w2 = r.get("Total Kata Doc 2") or r.get("Words B") or "-"
+        blocks = r.get("Jumlah Blok Teks Cocok") or r.get("Matches") or 0
 
         ws_all.append([
-            idx, r["Dokumen 1"], r["Dokumen 2"], max_s, status, badge, s1, s2, w1, w2, blocks
+            idx, r.get("Dokumen 1"), r.get("Dokumen 2"), max_s, status, badge, s1, s2, w1, w2, blocks
         ])
 
-        row_cells = [ws_all.cell(row=r_num, column=c) for c in range(1, len(all_headers) + 1)]
-        row_cells[0].alignment = Alignment(horizontal="center")
-        row_cells[3].alignment = Alignment(horizontal="right")
-        row_cells[3].number_format = '0.00"%"'
-        row_cells[4].alignment = Alignment(horizontal="center")
-        row_cells[5].alignment = Alignment(horizontal="center")
-        row_cells[6].alignment = Alignment(horizontal="right")
-        row_cells[6].number_format = '0.00"%"'
-        row_cells[7].alignment = Alignment(horizontal="right")
-        row_cells[7].number_format = '0.00"%"'
-        row_cells[8].alignment = Alignment(horizontal="right")
-        row_cells[9].alignment = Alignment(horizontal="right")
-        row_cells[10].alignment = Alignment(horizontal="center")
+        c_no = ws_all.cell(row=r_num, column=1)
+        c_no.alignment = ALIGN_CENTER_NOWRAP
+
+        c_score = ws_all.cell(row=r_num, column=4)
+        c_score.alignment = ALIGN_RIGHT
+        c_score.number_format = NUM_FMT_PERCENT
+
+        c_status = ws_all.cell(row=r_num, column=5)
+        c_status.alignment = ALIGN_CENTER_NOWRAP
+
+        c_badge = ws_all.cell(row=r_num, column=6)
+        c_badge.alignment = ALIGN_CENTER_NOWRAP
+
+        c_s1 = ws_all.cell(row=r_num, column=7)
+        c_s1.alignment = ALIGN_RIGHT
+        c_s1.number_format = NUM_FMT_PERCENT
+
+        c_s2 = ws_all.cell(row=r_num, column=8)
+        c_s2.alignment = ALIGN_RIGHT
+        c_s2.number_format = NUM_FMT_PERCENT
+
+        c_w1 = ws_all.cell(row=r_num, column=9)
+        c_w1.alignment = ALIGN_RIGHT
+        if isinstance(w1, (int, float)):
+            c_w1.number_format = NUM_FMT_INT
+
+        c_w2 = ws_all.cell(row=r_num, column=10)
+        c_w2.alignment = ALIGN_RIGHT
+        if isinstance(w2, (int, float)):
+            c_w2.number_format = NUM_FMT_INT
+
+        c_blocks = ws_all.cell(row=r_num, column=11)
+        c_blocks.alignment = ALIGN_CENTER_NOWRAP
 
         if status == "FAIL":
-            row_cells[4].fill = FAIL_FILL
-            row_cells[4].font = FAIL_FONT
-        else:
-            row_cells[4].fill = PASS_FILL
-            row_cells[4].font = PASS_FONT
-
-        if idx % 2 == 0 and status == "PASS":
-            for c_i in [1, 2]:
-                row_cells[c_i].fill = ZEBRA_FILL
-
-        for cell in row_cells:
-            cell.border = BORDER_BOX
-        ws_all.row_dimensions[r_num].height = 19
+            c_status.fill = FAIL_FILL
+            c_status.font = FAIL_FONT
 
     ws_all.freeze_panes = "A2"
     ws_all.auto_filter.ref = ws_all.dimensions
