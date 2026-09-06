@@ -807,14 +807,14 @@ def get_current_queue_status():
     if current_queued > 0 or pipeline_lock.locked():
         elapsed = int(now - pipeline_start_time) if pipeline_start_time > 0 else 0
         waiting = max(0, current_queued - 1)
-        status_html = f"""<div style="padding: 10px 14px; border-radius: 8px; background: #fff3cd; border: 1.5px solid #ffeeba; color: #856404; margin-bottom: 12px;">
-    <div style="font-size: 14.5px; font-weight: bold; display: flex; align-items: center; justify-content: space-between;">
-        <span>⏳ <b>Status Server: SEDANG MEMPROSES ANALISIS</b></span>
-        <span style="font-size: 12px; background: #ffe8a1; padding: 2px 8px; border-radius: 10px; color: #664d03;">{current_queued} Tugas Aktif</span>
+        status_html = f"""<div style="padding: 12px 16px; border-radius: 4px; background: #161920; border: 1px solid #F59E0B; color: #F3F4F6; margin-bottom: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Geist', sans-serif;">
+    <div style="font-size: 13.5px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace;">
+        <span style="color: #FCD34D;">⏳ <b>SERVER // SEDANG MEMPROSES ANALISIS</b></span>
+        <span style="font-size: 11px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); padding: 2px 8px; border-radius: 2px; color: #FCD34D;">{current_queued} TUGAS AKTIF</span>
     </div>
-    <div style="font-size: 12.5px; margin-top: 4px; color: #664d03;">
-        • <b>Proses Berjalan:</b> 1 analisis sedang aktif ({elapsed}s berjalan) &nbsp;|&nbsp; <b>Menunggu di Antrean:</b> {waiting} tugas<br/>
-        • <b>Database Saat Ini:</b> {doc_count} dokumen tersimpan ({pair_count:,} pasangan teranalisis)
+    <div style="font-size: 12px; margin-top: 6px; color: #94A3B8; font-family: 'Geist Mono', monospace; line-height: 1.6;">
+        • <b>Proses:</b> 1 analisis sedang aktif ({elapsed}s berjalan) &nbsp;|&nbsp; <b>Menunggu di Antrean:</b> {waiting} tugas<br/>
+        • <b>Database Cache:</b> {doc_count} dokumen tersimpan ({pair_count:,} pasangan teranalisis)
     </div>
 </div>"""
     else:
@@ -828,14 +828,17 @@ def get_current_queue_status():
             else:
                 last_updated_str = f"{diff_m // 60} jam yang lalu"
 
-        status_html = f"""<div style="padding: 10px 14px; border-radius: 8px; background: #d4edda; border: 1.5px solid #c3e6cb; color: #155724; margin-bottom: 12px;">
-    <div style="font-size: 14.5px; font-weight: bold; display: flex; align-items: center; justify-content: space-between;">
-        <span>🟢 <b>Status Server: KOSONG & SIAP (IDLE)</b></span>
-        <span style="font-size: 12px; background: #c3e6cb; padding: 2px 8px; border-radius: 10px; color: #0f5132;">0 Antrean Menunggu</span>
+        status_html = f"""<div style="padding: 12px 16px; border-radius: 4px; background: #111317; border: 1px solid #222631; color: #F3F4F6; margin-bottom: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Geist', sans-serif;">
+    <div style="font-size: 13.5px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace;">
+        <span style="color: #4ADE80; display: flex; align-items: center; gap: 8px;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: #22C55E; box-shadow: 0 0 8px #22C55E; display: inline-block;"></span>
+            <b>SERVER // SIAP & BEBAS ANTREAN (IDLE)</b>
+        </span>
+        <span style="font-size: 11px; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); padding: 2px 8px; border-radius: 2px; color: #4ADE80;">0 ANTREAN MENUNGGU</span>
     </div>
-    <div style="font-size: 12.5px; margin-top: 4px; color: #155724;">
-        • <b>Antrean Bebas:</b> Tidak ada proses berjalan. Analisis baru dapat langsung dimulai tanpa menunggu.<br/>
-        • <b>Terakhir Disinkronkan:</b> {last_updated_str} &nbsp;|&nbsp; <b>Database:</b> {doc_count} dokumen tersimpan ({pair_count:,} pasangan)
+    <div style="font-size: 12px; margin-top: 6px; color: #94A3B8; font-family: 'Geist Mono', monospace; line-height: 1.6;">
+        • <b>Status Antrean:</b> Bebas. Analisis mandiri (~2s) &amp; batch cohort dapat langsung dieksekusi.<br/>
+        • <b>Sinkronisasi Terakhir:</b> {last_updated_str} &nbsp;|&nbsp; <b>Basis Data:</b> {doc_count} dokumen ({pair_count:,} pasangan teranalisis)
     </div>
 </div>"""
 
@@ -1234,47 +1237,68 @@ def check_single_document(file_obj, min_words=6, pass_thresh=PASS_THRESHOLD, dro
 
     self_match_notice = ""
     if self_matches:
-        s_names = ", ".join([f"<code>{sm['Dokumen Pembanding']}</code> ({sm['Similaritas Naskah Anda (%)']}%)" for sm in self_matches])
-        self_match_notice = f"""<div style="margin-top: 10px; padding: 8px 12px; background: #e9ecef; border-left: 4px solid #6c757d; border-radius: 4px; font-size: 13px; color: #495057;">
+        s_names = ", ".join([f"<code style='color:#38BDF8;'>{sm['Dokumen Pembanding']}</code> ({sm['Similaritas Naskah Anda (%)']}%)" for sm in self_matches])
+        self_match_notice = f"""<div style="margin-top: 12px; padding: 10px 14px; background: #161920; border: 1px solid #343B4D; border-radius: 4px; font-size: 12.5px; color: #94A3B8; font-family: 'Geist Mono', monospace;">
         ℹ️ <b>Draf / Revisi Sebelumnya Terdeteksi:</b> {s_names}<br/>
-        <i>Sistem otomatis memfilter draf lama Anda agar tidak dianggap sebagai plagiasi terhadap diri sendiri. Skor di bawah adalah perbandingan murni terhadap naskah rekan cohort lainnya.</i>
+        <i>Sistem otomatis memfilter draf lama Anda agar tidak dianggap sebagai plagiasi terhadap diri sendiri. Skor perbandingan murni terhadap naskah rekan cohort lainnya.</i>
         </div>"""
 
     # Kotak Transparansi Metodologi Penilaian (Anti False-Positive)
     if is_pass:
         if cumulative_score > threshold:
-            transparency_box = f"""<div style="margin-top: 10px; padding: 10px 14px; background: rgba(13, 110, 253, 0.08); border-left: 4px solid #0d6efd; border-radius: 4px; font-size: 13px; color: #084298; line-height: 1.5;">
-                💡 <b>Transparansi Metodologi (Pencegahan False Positive):</b><br/>
+            transparency_box = f"""<div style="margin-top: 14px; padding: 12px 16px; background: rgba(56, 189, 248, 0.06); border-left: 3px solid #38BDF8; border-radius: 0 4px 4px 0; font-size: 13px; color: #BAE6FD; line-height: 1.6; font-family: -apple-system, BlinkMacSystemFont, 'Geist', sans-serif;">
+                💡 <b>Transparansi Metodologi Resmi (Pencegahan False Positive):</b><br/>
                 • <b>Penentu Kelulusan (Standar Laporan Excel):</b> Status diukur dari <b>Sumber Tunggal Terbesar (Top Match)</b> terhadap satu rekan (<b>{top_single_score:.2f}%</b> &le; {threshold:.1f}%). Dokumen Anda dinyatakan <b>LULUS</b> karena tidak terindikasi menyalin naskah rekan tertentu.<br/>
                 • <b>Tentang Skor Kumulatif ({cumulative_score:.2f}%):</b> Angka ini adalah total gabungan kemiripan terhadap seluruh {len(comparison_results)} dokumen cohort. Dalam ujian bersama, skor kumulatif wajar terakumulasi dari template soal ujian, rujukan UU/peraturan desa, dan terminologi baku yang digunakan banyak peserta, bukan plagiasi individu.
             </div>"""
         else:
-            transparency_box = f"""<div style="margin-top: 10px; padding: 10px 14px; background: rgba(25, 135, 84, 0.08); border-left: 4px solid #198754; border-radius: 4px; font-size: 13px; color: #0f5132; line-height: 1.5;">
+            transparency_box = f"""<div style="margin-top: 14px; padding: 12px 16px; background: rgba(34, 197, 94, 0.06); border-left: 3px solid #22C55E; border-radius: 0 4px 4px 0; font-size: 13px; color: #BBF7D0; line-height: 1.6; font-family: -apple-system, BlinkMacSystemFont, 'Geist', sans-serif;">
                 💡 <b>Transparansi Metodologi:</b> Baik kemiripan sumber tunggal terbesar (<b>{top_single_score:.2f}%</b>) maupun skor kumulatif cohort (<b>{cumulative_score:.2f}%</b>) berada di bawah ambang batas toleransi {threshold:.1f}%. Dokumen sepenuhnya bersih dari indikasi plagiasi.
             </div>"""
     else:
-        transparency_box = f"""<div style="margin-top: 10px; padding: 10px 14px; background: rgba(220, 53, 69, 0.08); border-left: 4px solid #dc3545; border-radius: 4px; font-size: 13px; color: #842029; line-height: 1.5;">
+        transparency_box = f"""<div style="margin-top: 14px; padding: 12px 16px; background: rgba(239, 68, 68, 0.08); border-left: 3px solid #EF4444; border-radius: 0 4px 4px 0; font-size: 13px; color: #FECACA; line-height: 1.6; font-family: -apple-system, BlinkMacSystemFont, 'Geist', sans-serif;">
             ⚠️ <b>Kemiripan Melebihi Batas Toleransi:</b><br/>
             Terdeteksi kemiripan tinggi sebesar <b>{top_single_score:.2f}%</b> terhadap dokumen rekan <code>{top_doc}</code> (batas toleransi: {threshold:.1f}%). Silakan periksa cuplikan teks identik pada bagian <i>Bukti Cuplikan Teks</i> di bawah untuk direvisi atau diparafrase.
         </div>"""
 
-    summary_html = f"""<div style="background-color: {bg_color}; border: 1px solid {border_color}; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; color: {status_color};">
-    <div style="font-size: 18px; font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-        <span>Status: {status_label}</span>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <span style="font-size: 13px; font-weight: bold; background: rgba(0,0,0,0.06); padding: 4px 10px; border-radius: 6px;">
-                🎯 Top Match: {top_single_score:.2f}% ({top_badge_label})
-            </span>
-            <span style="font-size: 13px; font-weight: bold; background: rgba(0,0,0,0.06); padding: 4px 10px; border-radius: 6px;">
-                🌐 Kumulatif Turnitin: {cumulative_score:.2f}% ({cum_badge_label})
-            </span>
+    status_badge_html = f"""<span style="font-size: 13px; font-weight: 700; font-family: 'Geist Mono', monospace; background: {'rgba(34, 197, 94, 0.12)' if is_pass else 'rgba(239, 68, 68, 0.15)'}; color: {'#4ADE80' if is_pass else '#F87171'}; border: 1px solid {'rgba(34, 197, 94, 0.3)' if is_pass else 'rgba(239, 68, 68, 0.35)'}; padding: 4px 12px; border-radius: 2px;">
+        {status_label}
+    </span>"""
+
+    summary_html = f"""<div style="background-color: #111317; border: 1px solid #222631; border-radius: 4px; padding: 20px 22px; margin-bottom: 16px; color: #F3F4F6; font-family: -apple-system, BlinkMacSystemFont, 'Geist', sans-serif;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid #222631; padding-bottom: 14px;">
+        <div>
+            <div style="font-size: 19px; font-weight: 700; letter-spacing: -0.02em; color: #FFFFFF;">
+                {uploaded_name}
+            </div>
+            <div style="font-size: 12px; color: #94A3B8; font-family: 'Geist Mono', monospace; margin-top: 4px;">
+                {len(words):,} KATA &nbsp;|&nbsp; DIBANDINGKAN TERHADAP {len(comparison_results)} DOKUMEN COHORT &nbsp;|&nbsp; TOLERANSI: {threshold:.1f}%
+            </div>
+        </div>
+        <div>
+            {status_badge_html}
         </div>
     </div>
-    <div style="font-size: 13.5px; line-height: 1.6;">
-        <b>Nama Dokumen:</b> <code>{uploaded_name}</code> ({len(words):,} kata) &nbsp;|&nbsp; 
-        Dibandingkan terhadap: <b>{len(comparison_results)}</b> dokumen cohort &nbsp;|&nbsp; 
-        Batas Toleransi: <b>{threshold:.1f}%</b><br/>
-        <b>Sumber Tunggal Terbesar (Top Match):</b> <code>{top_doc}</code> (<b>{top_single_score:.2f}%</b> &mdash; Status: <b>{'PASS' if top_single_score <= threshold else 'FAIL'}</b>)
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 16px;">
+        <div style="background: #090A0C; border: 1px solid #222631; padding: 12px 16px; border-radius: 2px;">
+            <div style="font-size: 11px; font-family: 'Geist Mono', monospace; color: #64748B; text-transform: uppercase;">Top Match (Sumber Tunggal)</div>
+            <div style="font-size: 24px; font-weight: 700; font-family: 'Geist Mono', monospace; color: {'#4ADE80' if is_pass else '#FCD34D'}; margin: 4px 0 2px;">
+                {top_single_score:.2f}%
+            </div>
+            <div style="font-size: 11.5px; color: #94A3B8; font-family: 'Geist Mono', monospace;">
+                {top_badge_label} &bull; vs <code>{top_doc}</code>
+            </div>
+        </div>
+        <div style="background: #090A0C; border: 1px solid #222631; padding: 12px 16px; border-radius: 2px;">
+            <div style="font-size: 11px; font-family: 'Geist Mono', monospace; color: #64748B; text-transform: uppercase;">Kumulatif Seluruh Cohort</div>
+            <div style="font-size: 24px; font-weight: 700; font-family: 'Geist Mono', monospace; color: #38BDF8; margin: 4px 0 2px;">
+                {cumulative_score:.2f}%
+            </div>
+            <div style="font-size: 11.5px; color: #94A3B8; font-family: 'Geist Mono', monospace;">
+                {cum_badge_label} &bull; Total Gabungan Cohort
+            </div>
+        </div>
     </div>
     {transparency_box}
     {self_match_notice}
@@ -1304,6 +1328,227 @@ def check_single_document(file_obj, min_words=6, pass_thresh=PASS_THRESHOLD, dro
     return summary_html, df_display, passages_md
 
 
+SWISS_MONOCHROME_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Geist:wght@300;400;500;600;700&display=swap');
+
+:root, body, .gradio-container {
+    --bg-dark: #090A0C !important;
+    --surface-dark: #111317 !important;
+    --surface-card: #161920 !important;
+    --border-dark: #222631 !important;
+    --border-strong: #343B4D !important;
+    --text-primary: #F3F4F6 !important;
+    --text-muted: #94A3B8 !important;
+    --text-dim: #64748B !important;
+    --accent-cyan: #38BDF8 !important;
+    background-color: #090A0C !important;
+    color: #F3F4F6 !important;
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+body, html, .gradio-container, gradio-app {
+    background: #090A0C !important;
+    color: #F3F4F6 !important;
+}
+
+.gradio-container .block,
+.gradio-container .panel,
+.gradio-container .form,
+.gradio-container fieldset {
+    background: #111317 !important;
+    border: 1px solid #222631 !important;
+    border-radius: 4px !important;
+    color: #F3F4F6 !important;
+}
+
+.swiss-masthead {
+    background: #111317;
+    border: 1px solid #222631;
+    border-radius: 4px;
+    padding: 18px 22px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.swiss-brand-title {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #F3F4F6;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.swiss-brand-sub {
+    font-size: 12px;
+    color: #94A3B8;
+    margin-top: 3px;
+    font-family: 'Geist Mono', monospace;
+}
+
+.swiss-specs {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: #64748B;
+}
+
+.swiss-chip {
+    background: #161920;
+    border: 1px solid #222631;
+    padding: 3px 8px;
+    border-radius: 2px;
+    color: #38BDF8;
+}
+
+.tabs > .tab-nav {
+    border-bottom: 1px solid #222631 !important;
+    background: transparent !important;
+    gap: 4px !important;
+}
+
+.tabs > .tab-nav > button {
+    font-family: 'Geist Mono', monospace !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    color: #64748B !important;
+    border: 1px solid transparent !important;
+    border-bottom: 2px solid transparent !important;
+    background: transparent !important;
+    border-radius: 4px 4px 0 0 !important;
+    padding: 10px 18px !important;
+    transition: all 0.15s ease !important;
+}
+
+.tabs > .tab-nav > button:hover {
+    color: #F3F4F6 !important;
+}
+
+.tabs > .tab-nav > button.selected {
+    color: #F3F4F6 !important;
+    background: #111317 !important;
+    border-color: #222631 !important;
+    border-bottom: 2px solid #38BDF8 !important;
+}
+
+button.primary, .btn-primary {
+    background: #F3F4F6 !important;
+    color: #090A0C !important;
+    font-weight: 700 !important;
+    font-size: 13.5px !important;
+    border: none !important;
+    border-radius: 4px !important;
+    font-family: 'Geist', sans-serif !important;
+    letter-spacing: -0.01em !important;
+    padding: 10px 18px !important;
+    transition: all 0.15s ease !important;
+    cursor: pointer !important;
+}
+
+button.primary:hover, .btn-primary:hover {
+    background: #FFFFFF !important;
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.2) !important;
+    transform: translateY(-1px) !important;
+}
+
+button.secondary, .btn-secondary {
+    background: #161920 !important;
+    color: #F3F4F6 !important;
+    border: 1px solid #343B4D !important;
+    font-family: 'Geist Mono', monospace !important;
+    font-size: 12px !important;
+    border-radius: 4px !important;
+    transition: all 0.15s ease !important;
+    cursor: pointer !important;
+}
+
+button.secondary:hover, .btn-secondary:hover {
+    border-color: #38BDF8 !important;
+    color: #38BDF8 !important;
+}
+
+.dataframe-table, table, .table-wrap, [data-testid="dataframe"] {
+    background-color: #111317 !important;
+    color: #F3F4F6 !important;
+    border-collapse: collapse !important;
+    font-size: 13px !important;
+    border: 1px solid #222631 !important;
+}
+
+th, .dataframe-table th {
+    background-color: #161920 !important;
+    color: #94A3B8 !important;
+    font-family: 'Geist Mono', monospace !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.06em !important;
+    border-bottom: 1px solid #222631 !important;
+    padding: 12px 16px !important;
+}
+
+td, .dataframe-table td {
+    border-bottom: 1px solid #222631 !important;
+    padding: 11px 16px !important;
+    color: #CBD5E1 !important;
+}
+
+tr:hover td, .dataframe-table tr:hover td {
+    background-color: rgba(255, 255, 255, 0.025) !important;
+    color: #F3F4F6 !important;
+}
+
+input[type="text"], textarea, .textbox input {
+    background: #090A0C !important;
+    color: #F3F4F6 !important;
+    border: 1px solid #222631 !important;
+    border-radius: 4px !important;
+    font-family: 'Geist', sans-serif !important;
+    font-size: 13px !important;
+}
+
+input[type="text"]:focus, textarea:focus {
+    border-color: #38BDF8 !important;
+    box-shadow: 0 0 0 1px #38BDF8 !important;
+}
+
+.file-upload, [data-testid="file-upload"], .dropzone {
+    background: #090A0C !important;
+    border: 1px dashed #343B4D !important;
+    border-radius: 4px !important;
+    transition: all 0.15s ease !important;
+}
+
+.file-upload:hover, [data-testid="file-upload"]:hover {
+    border-color: #38BDF8 !important;
+    background: rgba(56, 189, 248, 0.02) !important;
+}
+
+.accordion {
+    border: 1px solid #222631 !important;
+    border-radius: 4px !important;
+    background: #111317 !important;
+}
+
+.prose blockquote {
+    background: #090A0C !important;
+    border-left: 3px solid #EAB308 !important;
+    color: #CBD5E1 !important;
+    padding: 10px 16px !important;
+    border-radius: 0 4px 4px 0 !important;
+    font-family: 'Geist Mono', monospace !important;
+    font-size: 12.5px !important;
+    line-height: 1.7 !important;
+}
+"""
+
 # Setup Antarmuka Gradio
 def build_gradio_app():
     if gr is None:
@@ -1315,14 +1560,37 @@ def build_gradio_app():
     blocks_kwargs = {"title": "Turnitin Document Similarity - P3MD"}
     blocks_params = inspect.signature(gr.Blocks.__init__).parameters
     if "theme" in blocks_params:
-        blocks_kwargs["theme"] = gr.themes.Soft()
+        try:
+            blocks_kwargs["theme"] = gr.themes.Monochrome(
+                primary_hue="neutral",
+                secondary_hue="slate",
+                neutral_hue="zinc",
+                font=[gr.themes.GoogleFont("Geist"), "sans-serif"],
+                font_mono=[gr.themes.GoogleFont("Geist Mono"), "monospace"]
+            )
+        except Exception:
+            blocks_kwargs["theme"] = gr.themes.Base()
     if "css" in blocks_params:
-        blocks_kwargs["css"] = ".dataframe-table { font-size: 13.5px !important; }"
+        blocks_kwargs["css"] = SWISS_MONOCHROME_CSS
 
     with gr.Blocks(**blocks_kwargs) as demo:
-        gr.Markdown("""
-        # 🔍 Turnitin Document Similarity Checker (P3MD)
-        **Sistem Deteksi Similaritas Dokumen Tugas Cohort P3MD Berbasis Standar Turnitin Resmi**
+        gr.HTML("""
+        <div class="swiss-masthead">
+            <div class="swiss-brand">
+                <div class="swiss-brand-title">
+                    <span style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; background:#161920; border:1px solid #343B4D; border-radius:2px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#38BDF8"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    </span>
+                    <span>TURNITIN // P3MD COHORT SIMILARITY ENGINE</span>
+                </div>
+                <div class="swiss-brand-sub">Sistem Deteksi Similaritas Dokumen Tugas Cohort P3MD Berbasis Standar Turnitin Resmi</div>
+            </div>
+            <div class="swiss-specs">
+                <span>SQLITE RAM CACHE: AKTIF (~15ms)</span>
+                <span>STANDAR RESMI: VERBATIM 6-GRAM</span>
+                <span class="swiss-chip">🔵-🔴 5 TIERS</span>
+            </div>
+        </div>
         """)
 
         # Live Queue & Server Status Monitor (Bebas Antrean - queue=False)

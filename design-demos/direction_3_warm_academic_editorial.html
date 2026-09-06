@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turnitin P3MD — Academic Integrity Editorial</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper-bg: #FBF9F5;
+      --paper-surface: #FFFFFF;
+      --paper-card: #F5EFE6;
+      --paper-border: #E6DFD5;
+      --ink-primary: #1C1917;
+      --ink-secondary: #44403C;
+      --ink-muted: #78716C;
+      
+      --accent-ochre: #B45309;
+      --accent-forest: #15803D;
+      --accent-crimson: #B91C1C;
+      --accent-navy: #1E3A8A;
+      
+      --font-serif: 'Newsreader', Georgia, serif;
+      --font-sans: 'Inter', -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--paper-bg);
+      color: var(--ink-primary);
+      font-family: var(--font-sans);
+      font-size: 14.5px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 80px;
+    }
+
+    /* Masthead Header */
+    .masthead {
+      border-bottom: 1px solid var(--paper-border);
+      background: var(--paper-bg);
+      padding: 32px 0 20px;
+    }
+
+    .masthead-inner {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 0 32px;
+    }
+
+    .top-utility-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--ink-muted);
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--paper-border);
+      margin-bottom: 20px;
+    }
+
+    .masthead-title-wrap {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .masthead-title-wrap h1 {
+      font-family: var(--font-serif);
+      font-size: 34px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--ink-primary);
+    }
+
+    .masthead-title-wrap p {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: 16px;
+      color: var(--ink-secondary);
+      margin-top: 6px;
+    }
+
+    .audit-seal-card {
+      background: var(--paper-card);
+      border: 1px solid var(--paper-border);
+      padding: 10px 18px;
+      border-radius: 4px;
+      text-align: right;
+      font-size: 12px;
+    }
+
+    .audit-seal-card .seal-status {
+      font-weight: 700;
+      color: var(--accent-forest);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      justify-content: flex-end;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+    }
+
+    /* Main Editorial Layout */
+    .editorial-wrap {
+      max-width: 1360px;
+      margin: 32px auto 0;
+      padding: 0 32px;
+    }
+
+    .editorial-grid {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 36px;
+      align-items: start;
+    }
+
+    /* Left Sidebar Dossier */
+    .dossier-panel {
+      background: var(--paper-surface);
+      border: 1px solid var(--paper-border);
+      border-top: 3px solid var(--ink-primary);
+      padding: 24px;
+      border-radius: 2px;
+    }
+
+    .dossier-title {
+      font-family: var(--font-serif);
+      font-size: 18px;
+      font-weight: 600;
+      border-bottom: 1px solid var(--paper-border);
+      padding-bottom: 10px;
+      margin-bottom: 16px;
+    }
+
+    .stat-ledger {
+      list-style: none;
+    }
+
+    .stat-ledger li {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px dashed var(--paper-border);
+      font-size: 13.5px;
+    }
+
+    .stat-ledger li:last-child {
+      border-bottom: none;
+    }
+
+    .ledger-key {
+      color: var(--ink-muted);
+    }
+
+    .ledger-val {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--ink-primary);
+    }
+
+    .btn-editorial-dignity {
+      display: block;
+      width: 100%;
+      text-align: center;
+      background: var(--ink-primary);
+      color: var(--paper-bg);
+      border: 1px solid var(--ink-primary);
+      padding: 12px 16px;
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 13px;
+      border-radius: 2px;
+      cursor: pointer;
+      margin-top: 24px;
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+
+    .btn-editorial-dignity:hover {
+      background: #000000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .btn-editorial-hollow {
+      display: block;
+      width: 100%;
+      text-align: center;
+      background: transparent;
+      color: var(--ink-primary);
+      border: 1px solid var(--paper-border);
+      padding: 10px 16px;
+      font-family: var(--font-sans);
+      font-weight: 500;
+      font-size: 13px;
+      border-radius: 2px;
+      cursor: pointer;
+      margin-top: 10px;
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+
+    .btn-editorial-hollow:hover {
+      border-color: var(--ink-primary);
+    }
+
+    /* Tab Switcher */
+    .editorial-tabs {
+      display: flex;
+      gap: 24px;
+      border-bottom: 2px solid var(--ink-primary);
+      margin-bottom: 28px;
+    }
+
+    .editorial-tab-btn {
+      background: transparent;
+      border: none;
+      font-family: var(--font-serif);
+      font-size: 19px;
+      font-weight: 500;
+      color: var(--ink-muted);
+      padding: 10px 4px 14px;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.15s;
+    }
+
+    .editorial-tab-btn:hover {
+      color: var(--ink-primary);
+    }
+
+    .editorial-tab-btn.active {
+      color: var(--ink-primary);
+      font-weight: 700;
+    }
+
+    .editorial-tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--ink-primary);
+    }
+
+    .tab-section {
+      display: none;
+    }
+
+    .tab-section.active {
+      display: block;
+    }
+
+    /* Verification Dossier Card */
+    .dossier-card {
+      background: var(--paper-surface);
+      border: 1px solid var(--paper-border);
+      border-radius: 2px;
+      padding: 30px;
+      margin-bottom: 28px;
+    }
+
+    .dossier-header-grid {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding-bottom: 22px;
+      border-bottom: 1px solid var(--paper-border);
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .dossier-doc-title {
+      font-family: var(--font-serif);
+      font-size: 26px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    .dossier-doc-desc {
+      font-size: 13px;
+      color: var(--ink-muted);
+      margin-top: 6px;
+    }
+
+    .verdict-stamp {
+      display: inline-block;
+      border: 2px solid var(--accent-crimson);
+      color: var(--accent-crimson);
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 6px 14px;
+      letter-spacing: 0.08em;
+      border-radius: 2px;
+      text-transform: uppercase;
+      background: rgba(185, 28, 28, 0.04);
+    }
+
+    .scores-academic-duo {
+      display: flex;
+      gap: 20px;
+      margin-top: 14px;
+    }
+
+    .score-academic-box {
+      border: 1px solid var(--paper-border);
+      background: var(--paper-bg);
+      padding: 12px 18px;
+      border-radius: 2px;
+    }
+
+    .score-academic-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      letter-spacing: 0.05em;
+    }
+
+    .score-academic-num {
+      font-family: var(--font-serif);
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--accent-ochre);
+      margin-top: 2px;
+    }
+
+    /* Scholarly Methodology Note */
+    .scholarly-note {
+      background: #FDF6B2;
+      border-left: 3px solid var(--accent-ochre);
+      padding: 16px 20px;
+      font-size: 13.5px;
+      line-height: 1.65;
+      color: #723B13;
+      margin: 20px 0;
+    }
+
+    /* Scholarly Table */
+    .scholarly-table-wrap {
+      background: var(--paper-surface);
+      border: 1px solid var(--paper-border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .scholarly-table-header {
+      padding: 16px 20px;
+      background: var(--paper-card);
+      border-bottom: 1px solid var(--paper-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .scholarly-search {
+      border: 1px solid var(--paper-border);
+      background: var(--paper-surface);
+      padding: 7px 12px;
+      border-radius: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 360px;
+    }
+
+    .scholarly-search input {
+      border: none;
+      background: transparent;
+      outline: none;
+      font-family: var(--font-sans);
+      font-size: 13px;
+      width: 100%;
+      color: var(--ink-primary);
+    }
+
+    table.academic-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    table.academic-table th {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--ink-primary);
+      font-family: var(--font-serif);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink-primary);
+      background: var(--paper-surface);
+    }
+
+    table.academic-table td {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--paper-border);
+      font-size: 13.5px;
+      color: var(--ink-secondary);
+    }
+
+    table.academic-table tr:hover td {
+      background: var(--paper-bg);
+    }
+
+    /* Verbatim Comparison Quote */
+    .verbatim-audit-card {
+      background: var(--paper-surface);
+      border: 1px solid var(--paper-border);
+      border-left: 4px solid var(--accent-ochre);
+      padding: 24px;
+      margin-top: 24px;
+    }
+
+    .verbatim-quote {
+      font-family: var(--font-serif);
+      font-size: 15.5px;
+      line-height: 1.75;
+      color: var(--ink-primary);
+      background: var(--paper-bg);
+      padding: 16px 20px;
+      margin-top: 14px;
+      border-radius: 2px;
+    }
+
+    .verbatim-mark {
+      background: rgba(245, 158, 11, 0.25);
+      border-bottom: 2px solid var(--accent-ochre);
+      padding: 1px 3px;
+    }
+
+    /* Dropzone Editorial */
+    .dropzone-academic {
+      border: 1px dashed var(--paper-border);
+      background: var(--paper-bg);
+      padding: 36px 20px;
+      text-align: center;
+      margin-bottom: 20px;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    .dropzone-academic:hover {
+      border-color: var(--ink-primary);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Masthead -->
+  <header class="masthead">
+    <div class="masthead-inner">
+      <div class="top-utility-line">
+        <span>PROGRAM PEMBANGUNAN DAN PEMBERDAYAAN MASYARAKAT DESA (P3MD)</span>
+        <span>STANDAR EVALUASI INTEGRITAS AKADEMIK TURNITIN // COHORT DRAF EVALUASI</span>
+        <span>STATUS: SISTEM AKTIF</span>
+      </div>
+
+      <div class="masthead-title-wrap">
+        <div>
+          <h1>Pemeriksaan Similaritas Naskah P3MD</h1>
+          <p>Evaluasi Komprehensif Orisinalitas Naskah Uraian &amp; Tugas Tahap I Berbasis String-Matching K-Gram</p>
+        </div>
+        <div class="audit-seal-card">
+          <div class="seal-status">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+            SINKRONISASI AKTIF
+          </div>
+          <div style="color: var(--ink-muted); margin-top: 2px;">Database: 86 Berkas (1.035 Pasangan)</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="editorial-wrap">
+    <div class="editorial-grid">
+      
+      <!-- Left: Dossier Overview -->
+      <aside class="dossier-panel">
+        <div class="dossier-title">Ringkasan Cohort</div>
+        
+        <ul class="stat-ledger">
+          <li>
+            <span class="ledger-key">Total Naskah Terdaftar</span>
+            <span class="ledger-val">86 Naskah</span>
+          </li>
+          <li>
+            <span class="ledger-key">Tingkat Kelulusan</span>
+            <span class="ledger-val" style="color: var(--accent-forest);">91.8% (79 Lulus)</span>
+          </li>
+          <li>
+            <span class="ledger-key">Perlu Peninjauan (Fail)</span>
+            <span class="ledger-val" style="color: var(--accent-crimson);">8.2% (7 Kasus)</span>
+          </li>
+          <li>
+            <span class="ledger-key">Ambang Toleransi</span>
+            <span class="ledger-val">15.0% (Sumber Tunggal)</span>
+          </li>
+          <li>
+            <span class="ledger-key">K-Gram Parameter</span>
+            <span class="ledger-val">6 Kata Verbatim</span>
+          </li>
+          <li>
+            <span class="ledger-key">Eksklusi Turnitin</span>
+            <span class="ledger-val">Kutipan &amp; Daftar Pustaka</span>
+          </li>
+        </ul>
+
+        <a href="Turnitin_Similarity_Report_P3MD.xlsx" class="btn-editorial-dignity">
+          Unduh Dokumen Laporan Excel (7-Sheet)
+        </a>
+        <a href="https://drive.google.com/drive/u/0/folders/1YbKgSou6XhmCr1CLD2dRWy_ahzQ3HFDi" target="_blank" class="btn-editorial-hollow">
+          Buka Direktori Google Drive P3MD ↗
+        </a>
+      </aside>
+
+      <!-- Right: Main Editorial Stage -->
+      <section class="editorial-stage">
+        
+        <!-- Tab Bar -->
+        <div class="editorial-tabs">
+          <button class="editorial-tab-btn active" onclick="switchEdTab('tab-ed-instant')">
+            Pemeriksaan Naskah Mandiri
+          </button>
+          <button class="editorial-tab-btn" onclick="switchEdTab('tab-ed-cohort')">
+            Buku Catatan Rekapitulasi Cohort
+          </button>
+        </div>
+
+        <!-- Tab 1: Instant Check -->
+        <div id="tab-ed-instant" class="tab-section active">
+          
+          <div class="dropzone-academic">
+            <div style="font-family: var(--font-serif); font-size: 18px; font-weight: 600;">Serahkan Draf Naskah Tugas untuk Diuji</div>
+            <div style="font-size: 13px; color: var(--ink-muted); margin-top: 4px;">Pemeriksaan instan dijalankan di RAM server dalam waktu ~2 detik</div>
+          </div>
+
+          <!-- Sample Result Dossier -->
+          <div class="dossier-card">
+            <div class="dossier-header-grid">
+              <div>
+                <div class="dossier-doc-title">Rayga_Tes.pdf</div>
+                <div class="dossier-doc-desc">
+                  Total 2.418 Kata &bull; Diuji terhadap seluruh 86 naskah peserta angkatan P3MD
+                </div>
+                <div class="scores-academic-duo">
+                  <div class="score-academic-box">
+                    <div class="score-academic-label">Sumber Tunggal Terbesar (Top Match)</div>
+                    <div class="score-academic-num">38.44%</div>
+                  </div>
+                  <div class="score-academic-box">
+                    <div class="score-academic-label">Kumulatif Seluruh Dokumen</div>
+                    <div class="score-academic-num" style="color: var(--ink-secondary);">41.20%</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="text-align: right;">
+                <div class="verdict-stamp">MELEBIHI BATAS (FAIL)</div>
+                <div style="font-size: 11.5px; color: var(--ink-muted); margin-top: 6px; font-family: var(--font-mono);">
+                  Ambang Toleransi: 15.0%
+                </div>
+              </div>
+            </div>
+
+            <div class="scholarly-note">
+              <strong>Prinsip Keadilan Evaluasi (Pencegahan False-Positive):</strong><br>
+              Status kelulusan naskah semata-mata dinilai dari <strong>Sumber Tunggal Terbesar (Top Match: 38.44%)</strong> terhadap rekan <code>Tariq tes.pdf</code>. Skor kumulatif cohort (41.20%) sengaja dipisahkan agar kesamaan template soal ujian, rujukan UU No. 6 Tahun 2014, atau terminologi desa tidak dianggap sebagai plagiasi individu.
+            </div>
+
+            <h4 style="font-family: var(--font-serif); font-size: 17px; margin-bottom: 12px;">Daftar Rekan Naskah Paling Mirip</h4>
+            <div class="scholarly-table-wrap">
+              <table class="academic-table">
+                <thead>
+                  <tr>
+                    <th>Berkas Pembanding</th>
+                    <th>Tingkat Similaritas</th>
+                    <th>Status</th>
+                    <th>Kategori Turnitin</th>
+                    <th>Kutipan Verbatim</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>Tariq tes.pdf</strong></td>
+                    <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-ochre);">38.44%</td>
+                    <td><span style="color: var(--accent-crimson); font-weight: 700;">FAIL</span></td>
+                    <td>🟡 Yellow (25-49%)</td>
+                    <td style="font-family: var(--font-mono);">14 Blok Kalimat</td>
+                  </tr>
+                  <tr>
+                    <td>036_Fauzi Sufyan Prasetya_Ujian Tahap 1 P3MD.pdf</td>
+                    <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-ochre);">31.90%</td>
+                    <td><span style="color: var(--accent-crimson); font-weight: 700;">FAIL</span></td>
+                    <td>🟡 Yellow (25-49%)</td>
+                    <td style="font-family: var(--font-mono);">9 Blok Kalimat</td>
+                  </tr>
+                  <tr>
+                    <td>076_Bhakti Rossen Abim Perkasa_G1E2_UK1.pdf</td>
+                    <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-forest);">12.10%</td>
+                    <td><span style="color: var(--accent-forest); font-weight: 700;">PASS</span></td>
+                    <td>🟢 Green (1-24%)</td>
+                    <td style="font-family: var(--font-mono);">3 Blok Kalimat</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Proof Snippet Box -->
+            <div class="verbatim-audit-card">
+              <h4 style="font-family: var(--font-serif); font-size: 16px;">Bukti Tekstual Verbatim (vs Tariq tes.pdf)</h4>
+              <div class="verbatim-quote">
+                <strong>Blok I:</strong> "...<span class="verbatim-mark">program presiden untuk pemimpin masa depan</span> yang diorientasikan pada penguatan kapasitas kepemimpinan partisipatif di tingkat desa..."
+              </div>
+              <div class="verbatim-quote">
+                <strong>Blok II:</strong> "...<span class="verbatim-mark">soal 01 pengelolaan sumber daya nasional untuk pertahanan negara</span> dengan mengintegrasikan ketahanan pangan, energi, dan kesiapsiagaan aparatur desa..."
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- Tab 2: Cohort Table -->
+        <div id="tab-ed-cohort" class="tab-section">
+          <div class="scholarly-table-wrap">
+            <div class="scholarly-table-header">
+              <div class="scholarly-search">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                <input type="text" id="edSearch" placeholder="Saring nama berkas atau peserta..." oninput="filterEdTable()">
+              </div>
+              <div style="font-size: 12.5px; color: var(--ink-muted);">
+                Total 86 Naskah Peserta Terdaftar
+              </div>
+            </div>
+
+            <table class="academic-table">
+              <thead>
+                <tr>
+                  <th style="width: 60px;">Peringkat</th>
+                  <th>Nama Dokumen (Peserta)</th>
+                  <th>Status</th>
+                  <th>Skor Tertinggi</th>
+                  <th>Kategori</th>
+                  <th>Pasangan Paling Mirip</th>
+                  <th>Skor Pasangan</th>
+                  <th>Rata-rata</th>
+                </tr>
+              </thead>
+              <tbody id="edTableBody">
+                <tr>
+                  <td style="font-family: var(--font-mono); font-weight: 600;">#01</td>
+                  <td><strong>Rayga_Tes.pdf</strong></td>
+                  <td><span style="color: var(--accent-crimson); font-weight: 700;">FAIL</span></td>
+                  <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-ochre);">38.44%</td>
+                  <td>🟡 Yellow</td>
+                  <td>Tariq tes.pdf</td>
+                  <td style="font-family: var(--font-mono);">38.44%</td>
+                  <td style="font-family: var(--font-mono);">4.12%</td>
+                </tr>
+                <tr>
+                  <td style="font-family: var(--font-mono); font-weight: 600;">#02</td>
+                  <td><strong>Tariq tes.pdf</strong></td>
+                  <td><span style="color: var(--accent-crimson); font-weight: 700;">FAIL</span></td>
+                  <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-ochre);">35.02%</td>
+                  <td>🟡 Yellow</td>
+                  <td>036_Fauzi Sufyan Prasetya</td>
+                  <td style="font-family: var(--font-mono);">35.02%</td>
+                  <td style="font-family: var(--font-mono);">3.88%</td>
+                </tr>
+                <tr>
+                  <td style="font-family: var(--font-mono); font-weight: 600;">#03</td>
+                  <td><strong>036_Fauzi Sufyan Prasetya_Ujian Tahap 1 P3MD.pdf</strong></td>
+                  <td><span style="color: var(--accent-crimson); font-weight: 700;">FAIL</span></td>
+                  <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-ochre);">31.90%</td>
+                  <td>🟡 Yellow</td>
+                  <td>Rayga_Tes.pdf</td>
+                  <td style="font-family: var(--font-mono);">31.90%</td>
+                  <td style="font-family: var(--font-mono);">3.25%</td>
+                </tr>
+                <tr>
+                  <td style="font-family: var(--font-mono); font-weight: 600;">#04</td>
+                  <td>001_Kristian Leonardo Pandiangan_G1E2_UK1.pdf</td>
+                  <td><span style="color: var(--accent-forest); font-weight: 700;">PASS</span></td>
+                  <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-forest);">11.20%</td>
+                  <td>🟢 Green</td>
+                  <td>004_Baihaqi Ghozali</td>
+                  <td style="font-family: var(--font-mono);">11.20%</td>
+                  <td style="font-family: var(--font-mono);">1.84%</td>
+                </tr>
+                <tr>
+                  <td style="font-family: var(--font-mono); font-weight: 600;">#05</td>
+                  <td>008_Krisna Mughni_UUK1.pdf</td>
+                  <td><span style="color: var(--accent-forest); font-weight: 700;">PASS</span></td>
+                  <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-forest);">8.65%</td>
+                  <td>🟢 Green</td>
+                  <td>021_Rifky Rizkullah</td>
+                  <td style="font-family: var(--font-mono);">8.65%</td>
+                  <td style="font-family: var(--font-mono);">1.42%</td>
+                </tr>
+                <tr>
+                  <td style="font-family: var(--font-mono); font-weight: 600;">#06</td>
+                  <td>012_G3E1_Ashar Ali_Ujian Tahap I P3MD.pdf</td>
+                  <td><span style="color: var(--accent-forest); font-weight: 700;">PASS</span></td>
+                  <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-navy);">0.00%</td>
+                  <td>🔵 Blue</td>
+                  <td>-</td>
+                  <td style="font-family: var(--font-mono);">0.00%</td>
+                  <td style="font-family: var(--font-mono);">0.21%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
+    </div>
+  </main>
+
+  <script>
+    function switchEdTab(tabId) {
+      document.querySelectorAll('.editorial-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    function filterEdTable() {
+      const q = document.getElementById('edSearch').value.toLowerCase();
+      const rows = document.querySelectorAll('#edTableBody tr');
+      rows.forEach(r => {
+        const text = r.textContent.toLowerCase();
+        r.style.display = text.includes(q) ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>

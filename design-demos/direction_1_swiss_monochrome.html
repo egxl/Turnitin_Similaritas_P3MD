@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turnitin P3MD — Swiss Monochrome Precision</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090A0C;
+      --surface: #111317;
+      --surface-subtle: #161920;
+      --border: #222631;
+      --border-strong: #343B4D;
+      --text: #F3F4F6;
+      --text-muted: #94A3B8;
+      --text-dim: #64748B;
+      --accent: #38BDF8;
+      --accent-dim: rgba(56, 189, 248, 0.12);
+      
+      /* Turnitin Official Standards */
+      --ti-blue: #38BDF8;
+      --ti-green: #22C55E;
+      --ti-yellow: #EAB308;
+      --ti-orange: #F97316;
+      --ti-red: #EF4444;
+      
+      --pass: #22C55E;
+      --fail: #EF4444;
+      
+      --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'Geist Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 60px;
+    }
+
+    /* Top Technical Bar */
+    .tech-header {
+      border-bottom: 1px solid var(--border);
+      background: rgba(9, 10, 12, 0.85);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand-mark {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      font-size: 15px;
+    }
+
+    .brand-logo-sq {
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 2px;
+    }
+
+    .brand-logo-sq svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--accent);
+    }
+
+    .header-meta {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: rgba(34, 197, 94, 0.08);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: var(--pass);
+      font-size: 11.5px;
+      font-family: var(--font-mono);
+      border-radius: 2px;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background-color: currentColor;
+      border-radius: 50%;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    /* Main Container */
+    .main-wrap {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px 28px;
+    }
+
+    /* Grid layout */
+    .grid-swiss {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    /* Sidebar / Control Panel */
+    .swiss-sidebar {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 2px;
+      padding: 20px;
+      position: sticky;
+      top: 76px;
+    }
+
+    .panel-title {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    .metric-row:last-child {
+      border-bottom: none;
+    }
+
+    .metric-label {
+      color: var(--text-muted);
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Drive Sync Button */
+    .btn-swiss-primary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      background: var(--text);
+      color: var(--bg);
+      border: none;
+      padding: 11px 14px;
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 13px;
+      border-radius: 2px;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-swiss-primary:hover {
+      background: #FFFFFF;
+      transform: translateY(-1px);
+    }
+
+    .btn-swiss-outline {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border-strong);
+      padding: 9px 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      border-radius: 2px;
+      cursor: pointer;
+      margin-top: 10px;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .btn-swiss-outline:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Tabs Bar */
+    .tabs-bar {
+      display: flex;
+      gap: 2px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      border-bottom: none;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 10px 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+      border-radius: 2px 2px 0 0;
+    }
+
+    .tab-btn:hover {
+      color: var(--text);
+    }
+
+    .tab-btn.active {
+      background: var(--surface);
+      border-color: var(--border);
+      color: var(--text);
+      border-bottom: 1px solid var(--surface);
+      margin-bottom: -1px;
+    }
+
+    /* Tab Content */
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+    }
+
+    /* Verification Hero Card */
+    .result-swiss-card {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 2px;
+      padding: 24px;
+      margin-bottom: 24px;
+      position: relative;
+    }
+
+    .result-swiss-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .doc-identifier {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .doc-meta {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    .score-blocks {
+      display: flex;
+      gap: 14px;
+    }
+
+    .score-block {
+      border: 1px solid var(--border);
+      background: var(--bg);
+      padding: 12px 18px;
+      border-radius: 2px;
+      min-width: 140px;
+    }
+
+    .score-title {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .score-val {
+      font-family: var(--font-mono);
+      font-size: 26px;
+      font-weight: 700;
+      margin: 4px 0 2px;
+    }
+
+    .score-tier {
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* Methodology Rule Box */
+    .methodology-notice {
+      border-left: 2px solid var(--accent);
+      background: rgba(56, 189, 248, 0.05);
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #BAE6FD;
+      line-height: 1.6;
+      margin-top: 16px;
+      border-radius: 0 2px 2px 0;
+    }
+
+    /* Table Component */
+    .table-container {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .table-toolbar {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 7px 12px;
+      flex: 1;
+      max-width: 480px;
+    }
+
+    .search-box input {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      width: 100%;
+      outline: none;
+    }
+
+    .search-box input::placeholder {
+      color: var(--text-dim);
+    }
+
+    .search-kbd {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 2px 6px;
+      border: 1px solid var(--border-strong);
+      color: var(--text-dim);
+      border-radius: 2px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      background: var(--surface-subtle);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--text);
+    }
+
+    .mono-cell {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      border-radius: 2px;
+    }
+
+    .status-pass {
+      background: rgba(34, 197, 94, 0.1);
+      color: #4ADE80;
+      border: 1px solid rgba(34, 197, 94, 0.25);
+    }
+
+    .status-fail {
+      background: rgba(239, 68, 68, 0.1);
+      color: #F87171;
+      border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+
+    .tier-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11.5px;
+      font-family: var(--font-mono);
+    }
+
+    /* Verbatim Passage Box */
+    .passage-proof-box {
+      margin-top: 24px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 2px;
+      padding: 20px;
+    }
+
+    .passage-item {
+      background: var(--bg);
+      border-left: 2px solid var(--ti-yellow);
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.7;
+      color: #CBD5E1;
+    }
+
+    .highlight-match {
+      background: rgba(234, 179, 8, 0.18);
+      color: #FDE047;
+      padding: 2px 4px;
+      border-radius: 2px;
+    }
+
+    /* File Dropzone */
+    .dropzone-swiss {
+      border: 1px dashed var(--border-strong);
+      background: var(--bg);
+      border-radius: 2px;
+      padding: 36px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 20px;
+    }
+
+    .dropzone-swiss:hover {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.02);
+    }
+
+    .drop-icon {
+      margin-bottom: 12px;
+      display: inline-flex;
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+    }
+
+    .drop-icon svg {
+      width: 24px;
+      height: 24px;
+      stroke: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Tech Header -->
+  <header class="tech-header">
+    <div class="header-inner">
+      <div class="brand-mark">
+        <div class="brand-logo-sq">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <span>TURNITIN // P3MD COHORT SIMILARITY ENGINE</span>
+      </div>
+      <div class="header-meta">
+        <span>SQLITE RAM CACHE: ACTIVE (15ms)</span>
+        <span>STANDAR RESMI TURNITIN: VERBATIM 6-GRAM</span>
+        <div class="status-badge">
+          <span class="status-dot"></span>
+          SERVER IDLE (0 QUEUED)
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-wrap">
+    <div class="grid-swiss">
+      
+      <!-- Control Panel -->
+      <aside class="swiss-sidebar">
+        <div class="panel-title">
+          <span>Cohort Overview</span>
+          <span>86 DOCS</span>
+        </div>
+        
+        <div class="metric-row">
+          <span class="metric-label">Total Dokumen</span>
+          <span class="metric-value">86 Dokumen</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Pasangan Diuji</span>
+          <span class="metric-value">1,035 Pairs</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Tingkat Kelulusan</span>
+          <span class="metric-value" style="color: var(--pass);">91.8% PASS</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Ambang Kelulusan</span>
+          <span class="metric-value">≤ 15.0%</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Turnitin Tier</span>
+          <span class="metric-value">5 Tiers (🔵-🔴)</span>
+        </div>
+
+        <button class="btn-swiss-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Unduh Laporan 7-Sheet Excel
+        </button>
+        
+        <a href="https://drive.google.com/drive/u/0/folders/1YbKgSou6XhmCr1CLD2dRWy_ahzQ3HFDi" target="_blank" class="btn-swiss-outline">
+          📂 Buka Folder Drive P3MD ↗
+        </a>
+      </aside>
+
+      <!-- Main Stage -->
+      <section class="swiss-main-stage">
+        
+        <!-- Tabs -->
+        <div class="tabs-bar">
+          <button class="tab-btn active" onclick="switchTab('tab-instant')">
+            <span>[01]</span> CEK MANDIRI INSTAN (~2 DETIK)
+          </button>
+          <button class="tab-btn" onclick="switchTab('tab-cohort')">
+            <span>[02]</span> REKAPITULASI COHORT LEADERBOARD
+          </button>
+        </div>
+
+        <!-- Tab 1: Instant Check -->
+        <div id="tab-instant" class="tab-pane active">
+          
+          <div class="dropzone-swiss">
+            <div class="drop-icon">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+            </div>
+            <div style="font-weight: 500; font-size: 14px;">Tarik & Lepas Draf Tugas (.docx, .pdf, .txt) di Sini</div>
+            <div style="color: var(--text-dim); font-size: 12px; margin-top: 4px;">Pemeriksaan instan dijalankan di RAM server dalam &lt; 2 detik tanpa antrean</div>
+          </div>
+
+          <!-- Active Sample Result -->
+          <div class="result-swiss-card">
+            <div class="result-swiss-header">
+              <div>
+                <div class="doc-identifier">Rayga_Tes.pdf</div>
+                <div class="doc-meta">2,418 KATA &nbsp;|&nbsp; DIBANDINGKAN DENGAN 86 DOKUMEN COHORT &nbsp;|&nbsp; K-GRAM=6</div>
+              </div>
+              <div class="score-blocks">
+                <div class="score-block">
+                  <div class="score-title">Top Match (Sumber Tunggal)</div>
+                  <div class="score-val" style="color: var(--ti-yellow);">38.44%</div>
+                  <div class="score-tier">
+                    <span style="color: var(--ti-yellow);">🟡</span> Tier Yellow (FAIL)
+                  </div>
+                </div>
+                <div class="score-block">
+                  <div class="score-title">Kumulatif Cohort</div>
+                  <div class="score-val" style="color: var(--ti-orange);">41.20%</div>
+                  <div class="score-tier">
+                    <span style="color: var(--ti-orange);">🟠</span> Agregat Seluruh Kelas
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="methodology-notice">
+              <strong>Prinsip Anti False-Positive Turnitin:</strong> Kelulusan diukur mutlak dari <strong>Sumber Tunggal Terbesar (Top Match)</strong> terhadap satu rekan, bukan akumulasi kumulatif. Hal ini menjamin kutipan regulasi desa &amp; template naskah baku tidak membuat mahasiswa gagal secara keliru.
+            </div>
+          </div>
+
+          <!-- Top Matches Table -->
+          <div class="table-container">
+            <div class="table-toolbar">
+              <span style="font-family: var(--font-mono); font-size: 12px; font-weight: 600;">DOKUMEN REKAN PALING MIRIP (TOP MATCHES)</span>
+              <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);">DITEMUKAN 4 DOKUMEN &gt; 15%</span>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 50px;">#</th>
+                  <th>Dokumen Pembanding</th>
+                  <th>Similaritas</th>
+                  <th>Status</th>
+                  <th>Kategori Turnitin</th>
+                  <th>Blok Verbatim</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mono-cell">01</td>
+                  <td class="mono-cell" style="color: #fff; font-weight: 500;">Tariq tes.pdf</td>
+                  <td class="mono-cell" style="color: var(--ti-yellow); font-weight: 600;">38.44%</td>
+                  <td><span class="status-pill status-fail">FAIL</span></td>
+                  <td><span class="tier-badge">🟡 Yellow (25-49%)</span></td>
+                  <td class="mono-cell">14 Blok Teks</td>
+                </tr>
+                <tr>
+                  <td class="mono-cell">02</td>
+                  <td class="mono-cell">036_Fauzi Sufyan Prasetya_Ujian Tahap 1 P3MD.pdf</td>
+                  <td class="mono-cell" style="color: var(--ti-yellow); font-weight: 600;">31.90%</td>
+                  <td><span class="status-pill status-fail">FAIL</span></td>
+                  <td><span class="tier-badge">🟡 Yellow (25-49%)</span></td>
+                  <td class="mono-cell">9 Blok Teks</td>
+                </tr>
+                <tr>
+                  <td class="mono-cell">03</td>
+                  <td class="mono-cell">076_Bhakti Rossen Abim Perkasa_G1E2_UK1.pdf</td>
+                  <td class="mono-cell" style="color: var(--ti-green);">12.10%</td>
+                  <td><span class="status-pill status-pass">PASS</span></td>
+                  <td><span class="tier-badge">🟢 Green (1-24%)</span></td>
+                  <td class="mono-cell">3 Blok Teks</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Verbatim Passage Proof -->
+          <div class="passage-proof-box">
+            <div style="font-family: var(--font-mono); font-size: 12px; font-weight: 600; margin-bottom: 14px;">
+              BUKTI CUPLIKAN TEKS IDENTIK SECARA VERBATIM (VS TARIQ TES.PDF)
+            </div>
+            <div class="passage-item">
+              [BLOK #01] "...<span class="highlight-match">program presiden untuk pemimpin masa depan</span> yang diorientasikan pada penguatan kapasitas kepemimpinan partisipatif di tingkat desa..."
+            </div>
+            <div class="passage-item">
+              [BLOK #02] "...<span class="highlight-match">soal 01 pengelolaan sumber daya nasional untuk pertahanan negara</span> dengan mengintegrasikan ketahanan pangan, energi, dan kesiapsiagaan aparatur desa..."
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Tab 2: Cohort Leaderboard -->
+        <div id="tab-cohort" class="tab-pane">
+          <div class="table-container">
+            <div class="table-toolbar">
+              <div class="search-box">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                <input type="text" id="cohortSearch" placeholder="Cari nama mahasiswa atau file naskah (contoh: Fauzi, Tariq, Rayga)..." oninput="filterTable()">
+                <span class="search-kbd">⌘K</span>
+              </div>
+              <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);">
+                MENAMPILKAN 86 DOKUMEN COHORT
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 50px;">Rank</th>
+                  <th>Nama Dokumen (Peserta)</th>
+                  <th>Status</th>
+                  <th>Skor Tertinggi</th>
+                  <th>Kategori</th>
+                  <th>Top Match Partner</th>
+                  <th>Skor Match #1</th>
+                  <th>Rata-rata Cohort</th>
+                </tr>
+              </thead>
+              <tbody id="cohortBody">
+                <tr>
+                  <td class="mono-cell">#01</td>
+                  <td class="mono-cell" style="color: #fff; font-weight: 500;">Rayga_Tes.pdf</td>
+                  <td><span class="status-pill status-fail">FAIL</span></td>
+                  <td class="mono-cell" style="color: var(--ti-yellow); font-weight: 600;">38.44%</td>
+                  <td><span class="tier-badge">🟡 Yellow</span></td>
+                  <td class="mono-cell">Tariq tes.pdf</td>
+                  <td class="mono-cell">38.44%</td>
+                  <td class="mono-cell">4.12%</td>
+                </tr>
+                <tr>
+                  <td class="mono-cell">#02</td>
+                  <td class="mono-cell" style="color: #fff; font-weight: 500;">Tariq tes.pdf</td>
+                  <td><span class="status-pill status-fail">FAIL</span></td>
+                  <td class="mono-cell" style="color: var(--ti-yellow); font-weight: 600;">35.02%</td>
+                  <td><span class="tier-badge">🟡 Yellow</span></td>
+                  <td class="mono-cell">036_Fauzi Sufyan Prasetya</td>
+                  <td class="mono-cell">35.02%</td>
+                  <td class="mono-cell">3.88%</td>
+                </tr>
+                <tr>
+                  <td class="mono-cell">#03</td>
+                  <td class="mono-cell" style="color: #fff; font-weight: 500;">036_Fauzi Sufyan Prasetya_Ujian Tahap 1 P3MD.pdf</td>
+                  <td><span class="status-pill status-fail">FAIL</span></td>
+                  <td class="mono-cell" style="color: var(--ti-yellow); font-weight: 600;">31.90%</td>
+                  <td><span class="tier-badge">🟡 Yellow</span></td>
+                  <td class="mono-cell">Rayga_Tes.pdf</td>
+                  <td class="mono-cell">31.90%</td>
+                  <td class="mono-cell">3.25%</td>
+                </tr>
+                <tr>
+                  <td class="mono-cell">#04</td>
+                  <td class="mono-cell">001_Kristian Leonardo Pandiangan_G1E2_UK1.pdf</td>
+                  <td><span class="status-pill status-pass">PASS</span></td>
+                  <td class="mono-cell" style="color: var(--ti-green);">11.20%</td>
+                  <td><span class="tier-badge">🟢 Green</span></td>
+                  <td class="mono-cell">004_Baihaqi Ghozali</td>
+                  <td class="mono-cell">11.20%</td>
+                  <td class="mono-cell">1.84%</td>
+                </tr>
+                <tr>
+                  <td class="mono-cell">#05</td>
+                  <td class="mono-cell">008_Krisna Mughni_UUK1.pdf</td>
+                  <td><span class="status-pill status-pass">PASS</span></td>
+                  <td class="mono-cell" style="color: var(--ti-green);">8.65%</td>
+                  <td><span class="tier-badge">🟢 Green</span></td>
+                  <td class="mono-cell">021_Rifky Rizkullah</td>
+                  <td class="mono-cell">8.65%</td>
+                  <td class="mono-cell">1.42%</td>
+                </tr>
+                <tr>
+                  <td class="mono-cell">#06</td>
+                  <td class="mono-cell">012_G3E1_Ashar Ali_Ujian Tahap I P3MD.pdf</td>
+                  <td><span class="status-pill status-pass">PASS</span></td>
+                  <td class="mono-cell" style="color: var(--ti-blue);">0.00%</td>
+                  <td><span class="tier-badge">🔵 Blue</span></td>
+                  <td class="mono-cell">-</td>
+                  <td class="mono-cell">0.00%</td>
+                  <td class="mono-cell">0.21%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
+    </div>
+  </main>
+
+  <script>
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    function filterTable() {
+      const q = document.getElementById('cohortSearch').value.toLowerCase();
+      const rows = document.querySelectorAll('#cohortBody tr');
+      rows.forEach(r => {
+        const text = r.textContent.toLowerCase();
+        r.style.display = text.includes(q) ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>
