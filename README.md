@@ -17,17 +17,17 @@ Aplikasi pendeteksi similaritas dokumen berbasis standar Turnitin resmi yang dio
    - Menghilangkan batasan unduhan 50 file dari `gdown` atau Google Drive web view.
    - Menggunakan Google Drive API v3 dengan pagination resmi (`pageSize=1000` & loop `nextPageToken`).
    - Pemeriksaan ukuran file lokal: file yang sudah diunduh otomatis dilewati (**Smart Sync**), sehingga saat ada file baru di Drive, hanya file baru tersebut yang diunduh.
-   - Mendukung juga **Google Drive Mount** langsung (`/content/drive/MyDrive/...`) tanpa perlu download jaringan.
+   - Tanpa perlu pengaturan folder lokal manual atau mount Google Drive yang rumit.
 
 3. **Antarmuka Web Gratis (Gradio - Uptime 72 Jam)**:
    - Dilengkapi dashboard web interaktif modern yang dapat diakses langsung dari browser komputer maupun smartphone.
    - Menghasilkan tautan publik (`https://xxxx.gradio.live`) gratis selama 72 jam per sesi tanpa perlu registrasi akun atau kartu kredit.
    - Fitur Web UI:
-     - Input link folder Google Drive publik.
-     - Pengaturan slider ambang batas kata & persentase kelulusan.
-     - Live progress bar & status penghematan waktu.
-     - Tabel interaktif yang otomatis diurutkan dari nilai plagiasi tertinggi.
-     - Unduh laporan Excel resmi dengan satu klik.
+     - **Folder Google Drive Terintegrasi & Clickable**: Tombol langsung untuk membuka folder Google Drive tugas P3MD tempat peserta mengunggah dokumen.
+     - **Panduan Alur Kerja Jelas**: Kartu instruksi langkah-demi-langkah (Upload $\rightarrow$ Cek $\rightarrow$ Pantau $\rightarrow$ Unduh) terpampang langsung di antarmuka.
+     - **Bilah Kemajuan (*Live Progress Bar*)**: Memantau setiap tahapan (sinkronisasi Drive, ekstraksi teks dokumen, perbandingan inkremental pasangan, dan pembuatan laporan Excel) secara visual dan realtime.
+     - **Tabel Rekap Per Peserta (*Leaderboard*)**: Menampilkan status kelulusan (`PASS`/`FAIL`), skor tertinggi, dokumen paling mirip, dan rata-rata similaritas cohort.
+     - **Unduh Laporan Excel Resmi**: Unduh laporan 7-Sheet lengkap dalam format `.xlsx` dengan satu klik.
 
 4. **Standar Parameter Resmi Turnitin**:
    - **Metode String Matching & K-Gram Shingling:** Mencocokkan deretan 6–8 kata berurutan secara verbatim.
@@ -44,12 +44,15 @@ Aplikasi pendeteksi similaritas dokumen berbasis standar Turnitin resmi yang dio
 
 ## 🚀 Cara Menjalankan
 
-### Cara 1: Menggunakan Google Colab (Web UI - Direkomendasikan)
-1. Buka notebook di [Google Colab](https://colab.research.google.com/github/egxl/Turnitin_Similaritas_P3MD/blob/main/Turnitin_Similaritas_P3MD.ipynb).
+### Cara 1: Menggunakan Google Colab / Web UI (Direkomendasikan)
+1. Buka notebook di [Google Colab](https://colab.research.google.com/github/egxl/Turnitin_Similaritas_P3MD/blob/main/Turnitin_Similaritas_P3MD.ipynb) (atau jalankan `python app.py` secara lokal/server).
 2. Klik menu **Runtime > Run all** (`Ctrl + F9`).
 3. Pada **Sel 5: Antarmuka Web Interaktif**, buka tautan publik yang muncul (contoh: `https://xxxxxxxx.gradio.live`).
-4. Tempelkan link folder Google Drive dan klik tombol **"🚀 Analisis Similaritas / Cek Dokumen Baru"**.
-5. Unduh file Excel laporan `Turnitin_Similarity_Report_P3MD.xlsx`.
+4. **Alur Pengguna:**
+   - Klik tombol **"📂 Buka Folder Google Drive P3MD"** untuk mengunggah dokumen tugas (`.docx`, `.pdf`, atau `.txt`).
+   - Klik tombol **"🚀 Mulai Analisis Similaritas / Cek Dokumen Baru"**.
+   - Pantau bilah kemajuan (*progress bar*) yang berjalan secara realtime.
+   - Lihat hasil peringkat di tabel **Rekap Per Peserta (*Leaderboard*)** dan unduh laporan Excel resmi.
 
 ### Cara 2: Eksekusi Langsung Tanpa Web UI (Batch Mode)
 Jika hanya ingin menjalankan analisis langsung di Colab tanpa membuka antarmuka web:
