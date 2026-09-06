@@ -201,6 +201,9 @@ class TurnitinDBCache:
                             INSERT OR REPLACE INTO documents (filename, file_mtime, file_size, word_count, words_json)
                             VALUES (?, ?, ?, ?, ?)
                         """, (name, mtime, size, len(words), json.dumps(words)))
+                        if row is not None:
+                            # Dokumen yang sudah ada diperbarui: hapus data pasangan lama agar dihitung ulang otomatis
+                            cur.execute("DELETE FROM pairs WHERE doc_a = ? OR doc_b = ?", (name, name))
                         new_or_updated += 1
             conn.commit()
         finally:
@@ -325,6 +328,25 @@ class TurnitinDBCache:
                 })
 
         return pd.DataFrame(filtered_rows)
+
+    def cleanup_deleted_documents(self, active_filenames):
+        """Menghapus dokumen dan pasangannya dari cache jika file sudah tidak ada di disk."""
+        conn = sqlite3.connect(self.db_path)
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT filename FROM documents")
+            cached_docs = [r[0] for r in cur.fetchall()]
+            active_set = set(active_filenames)
+            pruned_count = 0
+            for d in cached_docs:
+                if d not in active_set:
+                    cur.execute("DELETE FROM documents WHERE filename = ?", (d,))
+                    cur.execute("DELETE FROM pairs WHERE doc_a = ? OR doc_b = ?", (d, d))
+                    pruned_count += 1
+            conn.commit()
+            return pruned_count
+        finally:
+            conn.close()
 
 def extract_folder_id(url):
     match = re.search(r"folders/([a-zA-Z0-9_-]+)", url)
@@ -500,6 +522,24 @@ def sync_drive_folder(folder_url_or_id, destination="./dokumen_tugas_p3md", log_
         if not success:
             log_callback(f"  ⚠️ Gagal mengunduh: {file_name}")
 
+    # 3. Prune file lokal lama yang sudah dihapus/direname di Google Drive (mencegah duplikat tugas)
+    remote_names = {it['name'] for it in eligible_items}
+    pruned = 0
+    if os.path.exists(destination):
+        for local_f in os.listdir(destination):
+            ext = os.path.splitext(local_f)[1].lower()
+            if ext in supported_exts and not local_f.startswith("~"):
+                if local_f not in remote_names:
+                    del_path = os.path.join(destination, local_f)
+                    try:
+                        os.remove(del_path)
+                        pruned += 1
+                        log_callback(f"  🗑️ Menghapus file lokal lama yang sudah dihapus di Drive: {local_f}")
+                    except Exception:
+                        pass
+        if pruned > 0:
+            log_callback(f"🧹 Membersihkan {pruned} file lokal yang tidak ada lagi di Google Drive.")
+
     log_callback(f"✅ Sinkronisasi selesai: {downloaded} file baru diunduh, {skipped} file sudah ada dilewati.")
     return downloaded, skipped
 
@@ -612,6 +652,12 @@ def run_analysis_pipeline(drive_url, min_words, pass_thresh, drop_quotes, drop_b
     # 3. Sinkronisasi SQLite Dokumen & Ekstraksi Teks (0.25 -> 0.50)
     progress(0.25, desc="Mempersiapkan database cache SQLite...")
     cache = TurnitinDBCache(db_path=db_path)
+    
+    # Bersihkan dokumen cache yang file fisiknya sudah dihapus dari disk
+    active_basenames = [os.path.basename(p) for p in file_paths]
+    pruned_c = cache.cleanup_deleted_documents(active_basenames)
+    if pruned_c > 0:
+        log(f"🧹 Menghapus {pruned_c} dokumen usang dari database cache SQLite.")
     
     def doc_prog_cb(curr, total, name):
         frac = 0.25 + 0.25 * (curr / max(total, 1))
@@ -729,6 +775,8 @@ def build_gradio_app():
                Bilah kemajuan di bagian atas akan menampilkan progres secara realtime mulai dari sinkronisasi Google Drive, ekstraksi teks dokumen, kalkulasi pasangan Turnitin, hingga auto-upload cache database.
             4. **Lihat Hasil & Unduh Laporan Excel:**  
                Gunakan fitur **Cari Dokumen** di bawah untuk menemukan nama dokumen Anda pada tabel **Rekap Per Peserta (*Leaderboard*)**, dan klik tombol unduh untuk mengunduh laporan resmi Excel 7-Sheet lengkap.
+            5. **💡 Pembaruan / Revisi Naskah Tugas:**  
+               Jika Anda ingin memperbarui naskah yang sudah pernah diunggah, **timpa file lama dengan nama file yang sama** ATAU **hapus file lama di Google Drive** saat mengunggah naskah baru. Sistem akan otomatis menghitung ulang naskah baru Anda tanpa terdeteksi mirip dengan versi lama Anda sendiri!
             """)
 
             with gr.Row():
