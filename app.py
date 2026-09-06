@@ -463,7 +463,7 @@ def sync_drive_folder(folder_url_or_id, destination="./dokumen_tugas_p3md", log_
         if remote_file:
             local_fpath = os.path.join(destination, sync_fname)
             rem_size = int(remote_file.get('size', 0))
-            if not os.path.exists(local_fpath) or (rem_size > 0 and os.path.getsize(local_fpath) != rem_size):
+            if not os.path.exists(local_fpath):
                 log_callback(f"📦 Mengunduh {sync_fname} dari Google Drive...")
                 try:
                     req = drive_service.files().get_media(fileId=remote_file['id'])
