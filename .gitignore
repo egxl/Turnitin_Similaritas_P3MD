@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Project Generated Cache and Output
+similarity_cache.db
+*.xlsx
+dokumen_tugas_p3md/
+.cache/
